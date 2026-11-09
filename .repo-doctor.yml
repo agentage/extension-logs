@@ -1,0 +1,11 @@
+# repo-doctor config for this repo; schema in agentage/automation scripts/repo-doctor/README.md.
+class: express-service
+waive:
+  - id: cicd-no-npm-token
+    reason: 'the first npm publish of an extension is staged with a token until the trusted publisher exists (the starting-point repo never releases: `agentage extension release` refuses its id)'
+  - id: rb-published-files
+    reason: 'no prepare-release: this repo never bumps; an extension made from it adds one with the release loop'
+  - id: obs-kit
+    reason: 'the extension kit owns the server, logs and /health (sealing); telemetry shipping lands in the kit'
+  - id: be-migrations-ci
+    reason: 'an extension never migrates from its own repo: the kit migrate job applies migrations/ in the local job (up) and in estate apply before each rollout; unit tests apply them to an in-process postgres'

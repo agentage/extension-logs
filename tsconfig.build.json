@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "sourceMap": false,
+    "declarationMap": false
+  },
+  "files": [],
+  "exclude": ["src/**/*.test.ts", "src/ui"]
+}

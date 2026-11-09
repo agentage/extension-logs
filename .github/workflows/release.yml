@@ -1,0 +1,40 @@
+name: Release
+
+# A v* tag: agentage extension release refuses the starting-point id, a commit off master and a tag that is
+# not the version, keeps a released version (re-run = npm only), then pushes the images, attaches
+# agentage-extension.json to the release and publishes to npm with OIDC (npm = this file).
+on:
+  push:
+    tags: ['v*']
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+
+jobs:
+  release:
+    name: Images, record, package
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: 'npm'
+      - run: npm ci --ignore-scripts && npm run verify
+      - run: npm install -g npm@11.21.2 # OIDC needs npm >= 11.5.1; 11.21.2 published probe 0.5.2
+      - env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: node_modules/.bin/agentage extension release # the lockfile's cli, never a fresh resolve

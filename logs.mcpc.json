@@ -1,0 +1,35 @@
+{
+  "serverInfo": {
+    "name": "agentage-logs",
+    "version": "0.1.0"
+  },
+  "tools": [
+    {
+      "description": "Echo a message back",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "msg": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": ["msg"],
+        "type": "object"
+      },
+      "name": "logs__echo",
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "msg": {
+            "type": "string"
+          }
+        },
+        "required": ["msg"],
+        "type": "object"
+      }
+    }
+  ]
+}

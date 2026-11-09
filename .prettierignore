@@ -1,0 +1,8 @@
+node_modules
+dist
+coverage
+package-lock.json
+*.snap
+*.tsbuildinfo
+test-results
+playwright-report

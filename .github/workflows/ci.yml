@@ -1,0 +1,112 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install
+        run: npm ci
+
+      - name: Verify (type-check, lint, format, test with coverage, build)
+        run: npm run verify
+
+      - name: Conformance (the kit's six rules; the store rule uses the runner's docker)
+        run: node_modules/.bin/agentage extension check
+
+  local:
+    name: up and the e2e gate on local
+    runs-on: ubuntu-latest
+    # The gate on local stays under 10 minutes; slower is a regression.
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install (and Chromium for the widget test; the runner has its OS libraries)
+        run: |
+          npm ci
+          npx playwright install chromium
+
+      # agentage/e2e is private (the org PAT_TOKEN reads it); Dependabot and fork runs get no secrets.
+      - name: Checkout agentage/e2e
+        if: github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.fork != true
+        uses: actions/checkout@v7
+        with:
+          repository: agentage/e2e
+          path: e2e-suite
+          token: ${{ secrets.PAT_TOKEN }}
+          persist-credentials: false
+
+      - name: Install agentage/e2e
+        if: github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.fork != true
+        run: |
+          npm ci --prefix e2e-suite --no-audit --no-fund
+          npx --prefix e2e-suite playwright install chromium
+
+      # The cli and its kit come from this lockfile: a cli or kit patch needs a commit here.
+      - name: agentage extension up (the release recipes, store, dev issuer, gateway)
+        run: node_modules/.bin/agentage extension up
+
+      - name: The widget a11y test through the local gateway (src/**/*.spec.ts)
+        run: npm run test:e2e
+
+      # Until agentage/e2e has the logs row the gate cannot run: a warning, never a silent pass.
+      - name: The logs row in agentage/e2e
+        id: row
+        if: github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.fork != true
+        run: |
+          if jq -e '.[] | select(.id == "logs")' e2e-suite/extensions.json >/dev/null; then
+            echo "has=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::agentage/e2e has no logs row yet: the gate on local did not run"
+          fi
+
+      # {ID}_DIR lets the gate read the contracts from this checkout; the name follows the id.
+      - name: e2e gate on local (agentage/e2e, a row in its extensions.json)
+        if: github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.fork != true && steps.row.outputs.has == 'true'
+        working-directory: e2e-suite
+        run: |
+          var="$(jq -r .agentage.id ../package.json | tr a-z- A-Z_)_DIR"
+          env "$var=$GITHUB_WORKSPACE" npm run e2e -- logs gate local
+
+      # A gate that skipped itself is not green.
+      - name: Assert the gate was not vacuous
+        if: github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.fork != true && steps.row.outputs.has == 'true'
+        working-directory: e2e-suite
+        env:
+          MIN_EXECUTED: '25'
+        run: node scripts/assert-executed.mjs
+
+      - name: Logs on failure
+        if: failure() || cancelled()
+        run: docker compose -f .agentage/compose.json logs --no-color --tail 80 || true

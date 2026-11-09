@@ -1,0 +1,91 @@
+{
+  "name": "@agentage/extension-logs",
+  "version": "0.1.0",
+  "description": "The logs extension: one events table in ClickHouse, the ingest, search, trace, stats and hosts api, five MCP tools and three widgets",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/agentage/extension-logs.git"
+  },
+  "homepage": "https://agentage.io",
+  "bugs": {
+    "url": "https://github.com/agentage/extension-logs/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22",
+    "agentage": "^0.11"
+  },
+  "agentage": {
+    "id": "logs",
+    "parts": {
+      "ui": true,
+      "api": true,
+      "mcp": true,
+      "worker": true
+    },
+    "settings": {},
+    "secrets": []
+  },
+  "exports": {
+    "./agentage-extension.json": "./dist/agentage-extension.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "store",
+    "!dist/**/*.test.*"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && (test ! -d src/ui || agentage-widget bundle)",
+    "type-check": "tsc --noEmit -p tsconfig.eslint.json",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test --pass-with-no-tests",
+    "verify": "npm run type-check && npm run lint && npm run format:check && npm run test:coverage && npm run build",
+    "prepublishOnly": "npm run verify"
+  },
+  "dependencies": {
+    "@agentage/extension": "0.11.0",
+    "express": "^5.1.0",
+    "zod": "^4.2.0"
+  },
+  "devDependencies": {
+    "@agentage/cli": "0.50.2",
+    "@agentage/widget": "^0.3.0",
+    "@axe-core/playwright": "4.14.0",
+    "@playwright/test": "1.64.1",
+    "@types/express": "5.0.6",
+    "@types/node": "26.6.6",
+    "@types/react": "19.3.0",
+    "@typescript-eslint/eslint-plugin": "8.72.1",
+    "@typescript-eslint/parser": "8.72.1",
+    "@vitest/coverage-v8": "5.1.0",
+    "eslint": "10.14.0",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-jsx-a11y": "6.10.2",
+    "eslint-plugin-playwright": "2.12.2",
+    "eslint-plugin-prettier": "5.5.7",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "prettier": "3.9.10",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "typescript": "6.0.3",
+    "vitest": "5.1.0"
+  },
+  "keywords": [
+    "agentage",
+    "agentage-extension"
+  ],
+  "overrides": {
+    "eslint-plugin-jsx-a11y": {
+      "eslint": "$eslint"
+    }
+  }
+}

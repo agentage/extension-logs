@@ -1,0 +1,35 @@
+version: 2
+updates:
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'friday'
+      time: '16:07'
+      timezone: 'Etc/UTC'
+    assignees:
+      - 'vreshch'
+    open-pull-requests-limit: 10
+    ignore:
+      # typescript-eslint peer-caps typescript - drop when it supports the next major
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
+    groups:
+      all-dependencies:
+        patterns:
+          - '*'
+
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'friday'
+      time: '16:07'
+      timezone: 'Etc/UTC'
+    assignees:
+      - 'vreshch'
+    open-pull-requests-limit: 5
+    groups:
+      all-actions:
+        patterns:
+          - '*'
