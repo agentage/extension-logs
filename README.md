@@ -13,6 +13,17 @@ owns servers, `/health`, auth, the scheduler and the images.
 | worker | [`src/worker`](src/worker/index.ts) | job `retention`, nightly                                                |
 | ui     | [`src/ui`](src/ui/index.ts)         | the widgets `events`, `hosts`, `services`                               |
 
+## Scopes
+
+Any account can mint `logs:read` and `logs:write` for itself, so neither opens a read; only an
+admin mints `logs:admin` or a service subject (`svc_`).
+
+| Call                                                                             | Needs                                   | Else                                            |
+| -------------------------------------------------------------------------------- | --------------------------------------- | ----------------------------------------------- |
+| `POST /events`                                                                   | `logs:write` and a `svc_` token subject | 403 `FORBIDDEN` "ingest needs a service token"  |
+| `GET /events`, `/traces/{agcid}`, `/stats`, `/hosts`, `/hosts/{host}/containers` | `logs:admin`                            | 403, `WWW-Authenticate: ... scope="logs:admin"` |
+| every `logs__*` tool                                                             | `logs:admin`                            | 403                                             |
+
 ## Run
 
 Needs Node 22+, npm 10+, Docker, `git` and `jq`.
@@ -35,6 +46,9 @@ npm run harness:seed                     # LOGS_URL and LOGS_ISSUER override 428
 echo "http://localhost:4280/ui/$(jq -r .version package.json)/harness.html?widget=events&scope=logs:admin"
 ```
 
+The seed mints its ingest token from the dev issuer with subject `svc_seed`
+(`POST localhost:4281/token {"scope":"logs:write","sub":"svc_seed"}`): `agentage extension token`
+sets no subject, so its `usr_dev` token gets 403 on `POST /events`.
 `?widget=events|hosts|services` picks one widget, `?scope=logs:admin` makes the dev issuer mint
 the admin token the reads need, `?q=` prefills the events search, `?theme=light|dark` the theme.
 A row is red, its reason in the state cell, by: `events` level error; `hosts` the api's `red`

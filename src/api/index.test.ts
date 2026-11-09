@@ -6,7 +6,8 @@ import { LINES } from './lines.fixture.js';
 describe('the api part', () => {
   it('starts while the store is down and answers 503 to an ingest until it is back', async () => {
     const ctx = createTestContext({ secrets: { storeUrl: 'http://default:x@127.0.0.1:1' } });
-    const server = await startTestServer({ create, ctx });
+    const caller = { sub: 'svc_shipper', scopes: ['logs:write'] };
+    const server = await startTestServer({ create, ctx, caller });
     const init = { method: 'POST', headers: { 'content-type': 'application/json' } };
     const res = await server.fetch('/api/v1/events', {
       ...init,

@@ -163,7 +163,7 @@
         "summary": "Search events",
         "security": [
           {
-            "pat": ["logs:read"]
+            "pat": ["logs:admin"]
           }
         ],
         "parameters": [
@@ -482,7 +482,7 @@
         "summary": "Trace one agcid",
         "security": [
           {
-            "pat": ["logs:read"]
+            "pat": ["logs:admin"]
           }
         ],
         "parameters": [
