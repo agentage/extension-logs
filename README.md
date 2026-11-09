@@ -37,8 +37,10 @@ echo "http://localhost:4280/ui/$(jq -r .version package.json)/harness.html?widge
 
 `?widget=events|hosts|services` picks one widget, `?scope=logs:admin` makes the dev issuer mint
 the admin token the reads need, `?q=` prefills the events search, `?theme=light|dark` the theme.
-A row is red by: `events` level error; `hosts` a sample older than 3 min, cpu > 80, mem > 85 or
-disk > 80; `services` availability under 99.0 % (a dash under 50 requests) or p95 over 1000 ms.
+A row is red, its reason in the state cell, by: `events` level error; `hosts` the api's `red`
+(a sample older than 3 min, cpu > 80, mem > 85 or disk > 80); `services` (edge rows left out)
+availability under 99.0 % (a dash under 50 requests) or the worst route's p95 over 1000 ms.
+The seed posts to `localhost` or `127.0.0.1` only.
 `npm run test:e2e` runs the widget spec (states, the red rule, axe WCAG A/AA) against `up`.
 
 ## License

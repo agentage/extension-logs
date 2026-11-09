@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Route } from '@playwright/test';
 
 // The ui part in a browser through the local gateway (after up); the api answers are routed here.
 const { version } = JSON.parse(
@@ -63,16 +63,24 @@ const json = (body: unknown, status = 200) => ({
 const answer = (path: string) =>
   DATA[path.includes('/containers') ? 'containers' : (path.split('/')[3] ?? '')];
 
+// The first answer comes late and with three rows, after the newer one has landed.
+const slowly = async (route: Route) => {
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  await route.fulfill(json({ success: true, data: [1, 2, 3].map((i) => event(i, 'info')) }));
+};
+
 const open = async (
   page: Page,
   widget: string,
-  mode: 'data' | 'empty' | 'error' | 'hang' = 'data'
+  mode: 'data' | 'empty' | 'error' | 'hang' = 'data',
+  slow = ''
 ) => {
   const seen: string[] = [];
   await page.route('**/api/v1/**', (route) => {
     const url = new URL(route.request().url());
     seen.push(url.pathname + url.search);
     if (mode === 'hang') return;
+    if (url.pathname + url.search === slow) return slowly(route);
     if (mode === 'error')
       return route.fulfill(
         json({ success: false, error: { code: 'UNAVAILABLE', message: 'store down' } }, 503)
@@ -109,26 +117,57 @@ for (const widget of ['events', 'hosts', 'services']) {
     });
 }
 
-test('events: a level narrows the query, an agcid opens its trace list', async ({ page }) => {
+const axe = async (page: Page) => {
+  const { violations } = await new AxeBuilder({ page }).withTags(WCAG).analyze();
+  expect(violations.map((violation) => violation.id)).toEqual([]);
+};
+
+test('events: filters narrow the query, an agcid opens its trace list', async ({ page }) => {
   const { el, seen } = await open(page, 'events');
   await el.getByLabel('level').selectOption('error');
   await expect.poll(() => seen.at(-1)).toBe('/api/v1/events?level=error&limit=100');
+  await el.getByLabel('extension').selectOption('probe');
+  await expect.poll(() => seen.at(-1)).toBe('/api/v1/events?level=error&extension=probe&limit=100');
   await el
-    .getByRole('button', { name: A.slice(0, 12) })
+    .getByRole('button', { name: `trace ${A}` })
     .first()
     .click();
-  await expect(el).toContainText(`agcid ${A} 2 hops · 41 ms · ok`);
+  await expect(el.getByRole('heading')).toBeFocused();
+  await expect(el.getByRole('heading')).toHaveText(`agcid ${A} 2 hops · 41 ms · ok`);
   await expect(el.locator('tbody tr')).toHaveCount(2);
   expect(seen.at(-1)).toBe(`/api/v1/traces/${A}`);
+  await axe(page);
 });
 
-test('hosts: a host opens its containers; services: availability and p95', async ({
-  page,
-  context,
-}) => {
-  const hosts = await open(page, 'hosts');
-  await hosts.el.getByRole('button', { name: 'next-2' }).click();
-  await expect(hosts.el).toContainText('logs_api12.5%100 MB512 MB');
-  const services = await open(await context.newPage(), 'services');
-  await expect(services.el.locator('tr.red')).toContainText('probe/mcp1002.0%30 ms98.00%');
+test('events: clearing the search applies at once', async ({ page }) => {
+  const { el, seen } = await open(page, 'events');
+  await el.getByLabel('search').fill('machines');
+  await el.getByLabel('search').press('Enter');
+  await expect.poll(() => seen.at(-1)).toBe('/api/v1/events?q=machines&limit=100');
+  await el.getByLabel('search').fill('');
+  await expect.poll(() => seen.at(-1)).toBe('/api/v1/events?limit=100');
+});
+
+test('events: a slow answer for an older filter never replaces the newer one', async ({ page }) => {
+  const { el } = await open(page, 'events', 'data', '/api/v1/events?limit=100');
+  await el.getByLabel('level').selectOption('error');
+  await expect(el.locator('tbody tr')).toHaveCount(2);
+  await page.waitForTimeout(2000);
+  await expect(el.locator('tbody tr')).toHaveCount(2);
+});
+
+test('hosts: a host opens its containers, axe clean there', async ({ page }) => {
+  const { el, seen } = await open(page, 'hosts');
+  await expect(el.locator('tr.red')).toContainText('cpu > 80');
+  await el.getByRole('button', { name: 'containers of next-2' }).click();
+  await expect(el.getByRole('heading')).toBeFocused();
+  await expect(el).toContainText('logs_api12.5%100 MB512 MB');
+  expect(seen.at(-1)).toBe('/api/v1/hosts/next-2/containers');
+  await axe(page);
+});
+
+test('services: the reason, availability and the worst route p95', async ({ page }) => {
+  const { el } = await open(page, 'services');
+  await expect(el.locator('tr.red')).toContainText('avail < 99.0 %probe/mcp1002.0%30 ms98.00%');
+  await expect(el.getByRole('columnheader', { name: 'p95 worst route' })).toBeVisible();
 });

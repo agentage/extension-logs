@@ -4,6 +4,10 @@ import { randomBytes } from 'node:crypto';
 
 const BASE = process.env.LOGS_URL ?? 'http://localhost:4280';
 const ISSUER = process.env.LOGS_ISSUER ?? 'http://localhost:4281';
+// The rows carry real estate host names: never plant them anywhere but this machine.
+for (const url of [BASE, ISSUER])
+  if (!['localhost', '127.0.0.1'].includes(new URL(url).hostname))
+    throw new Error(`harness-seed posts to localhost or 127.0.0.1 only, not ${url}`);
 const token = execFileSync('node_modules/.bin/agentage', [
   ...['extension', 'token', '--scope', 'logs:write', '--issuer', ISSUER],
 ])
