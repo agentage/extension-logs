@@ -28,7 +28,9 @@
       "worker": true
     },
     "settings": {},
-    "secrets": []
+    "secrets": [
+      "store-url"
+    ]
   },
   "exports": {
     "./agentage-extension.json": "./dist/agentage-extension.json",
@@ -53,6 +55,7 @@
   },
   "dependencies": {
     "@agentage/extension": "0.11.0",
+    "@clickhouse/client": "1.25.0",
     "express": "^5.1.0",
     "zod": "^4.2.0"
   },
