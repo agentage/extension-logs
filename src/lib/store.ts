@@ -1,4 +1,4 @@
-import { createClient } from '@clickhouse/client';
+import { ClickHouseLogLevel, createClient } from '@clickhouse/client';
 import { fail, type Log } from '@agentage/extension';
 import { EVENTS_DDL } from './ddl.js';
 
@@ -20,7 +20,9 @@ export interface EventsStore {
 const ISO_TS = { date_time_input_format: 'best_effort' } as const;
 
 export const clickhouse = (url: string): Clickhouse => {
-  const client = createClient({ url, request_timeout: 10_000 });
+  // Its own logger writes plain-text lines to stderr; failures reach the part's JSON log instead.
+  const log = { level: ClickHouseLogLevel.OFF };
+  const client = createClient({ url, request_timeout: 10_000, log });
   const settings = { format: 'JSONEachRow', clickhouse_settings: ISO_TS } as const;
   return {
     command: async (query) => void (await client.command({ query })),
