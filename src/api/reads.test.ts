@@ -40,6 +40,7 @@ const get = async (path: string, caller: Caller | null) => {
 };
 const as = (...scopes: string[]): Caller => ({ sub: 'usr_test', scopes });
 const A = 'a'.repeat(32);
+const cursor = (pair: unknown) => Buffer.from(JSON.stringify(pair)).toString('base64url');
 interface Body {
   data: object[] & object;
   meta: { pagination: object };
@@ -80,12 +81,23 @@ describe('the read routes', () => {
     );
   });
 
-  it.each(['/events?cursor=bm9wZQ', '/events?since=yesterday', `/traces/xyz`, '/stats?window=2d'])(
-    'refuses %s with 400',
-    async (path) => {
-      expect((await get(path, as('logs:admin'))).status).toBe(400);
-    }
-  );
+  it('refuses logs:write with the insufficient_scope header the kit sends', async () => {
+    const res = await get('/events', as('logs:write'));
+    expect(res.headers.get('www-authenticate')).toBe(
+      'Bearer error="insufficient_scope", scope="logs:read"'
+    );
+  });
+
+  it.each([
+    `/events?cursor=${cursor(['x', 'y'])}`,
+    `/events?cursor=${cursor([1])}`,
+    '/events?cursor=bm9wZQ',
+    '/events?since=yesterday',
+    `/traces/xyz`,
+    '/stats?window=2d',
+  ])('refuses %s with 400', async (path) => {
+    expect((await get(path, as('logs:admin'))).status).toBe(400);
+  });
 
   it('traces a known agcid: hops, ms, ok', async () => {
     query.mockResolvedValueOnce([row, { ...row, kind: 'span', ts: '2026-11-10 09:12:03.450' }]);

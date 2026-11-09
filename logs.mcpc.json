@@ -60,31 +60,48 @@
               "additionalProperties": false,
               "properties": {
                 "agcid": {
-                  "type": ["string", "null"]
+                  "anyOf": [
+                    {
+                      "pattern": "^[0-9a-f]{32}$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
                 },
                 "client": {
                   "type": "string"
                 },
                 "extension": {
+                  "maxLength": 64,
+                  "minLength": 1,
                   "type": "string"
                 },
                 "fields": {
                   "additionalProperties": {},
+                  "default": {},
                   "propertyNames": {
                     "type": "string"
                   },
                   "type": "object"
                 },
                 "host": {
+                  "default": "",
+                  "maxLength": 253,
                   "type": "string"
                 },
                 "id": {
                   "type": "string"
                 },
                 "kind": {
+                  "enum": ["http", "mcp", "job", "span", "error", "event", "log"],
                   "type": "string"
                 },
                 "level": {
+                  "default": "info",
+                  "enum": ["info", "warn", "error"],
                   "type": "string"
                 },
                 "method": {
@@ -100,19 +117,39 @@
                   "type": "boolean"
                 },
                 "part": {
+                  "maxLength": 64,
+                  "minLength": 1,
                   "type": "string"
                 },
                 "route": {
                   "type": "string"
                 },
                 "session": {
-                  "type": ["string", "null"]
+                  "anyOf": [
+                    {
+                      "maxLength": 200,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
                 },
                 "status": {
                   "type": "number"
                 },
                 "sub": {
-                  "type": ["string", "null"]
+                  "anyOf": [
+                    {
+                      "pattern": "^(usr|svc)_[\\w-]{1,64}$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
                 },
                 "ts": {
                   "type": "string"
@@ -121,12 +158,12 @@
                   "type": "string"
                 },
                 "version": {
+                  "default": "",
+                  "maxLength": 64,
                   "type": "string"
                 }
               },
               "required": [
-                "id",
-                "ts",
                 "level",
                 "kind",
                 "msg",
@@ -137,21 +174,22 @@
                 "agcid",
                 "sub",
                 "session",
+                "fields",
+                "id",
+                "ts",
                 "userType",
                 "client",
                 "method",
                 "route",
                 "status",
                 "ms",
-                "ok",
-                "fields"
+                "ok"
               ],
               "type": "object"
             },
             "type": "array"
           }
         },
-        "required": ["events"],
         "type": "object"
       }
     },
@@ -181,31 +219,48 @@
               "additionalProperties": false,
               "properties": {
                 "agcid": {
-                  "type": ["string", "null"]
+                  "anyOf": [
+                    {
+                      "pattern": "^[0-9a-f]{32}$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
                 },
                 "client": {
                   "type": "string"
                 },
                 "extension": {
+                  "maxLength": 64,
+                  "minLength": 1,
                   "type": "string"
                 },
                 "fields": {
                   "additionalProperties": {},
+                  "default": {},
                   "propertyNames": {
                     "type": "string"
                   },
                   "type": "object"
                 },
                 "host": {
+                  "default": "",
+                  "maxLength": 253,
                   "type": "string"
                 },
                 "id": {
                   "type": "string"
                 },
                 "kind": {
+                  "enum": ["http", "mcp", "job", "span", "error", "event", "log"],
                   "type": "string"
                 },
                 "level": {
+                  "default": "info",
+                  "enum": ["info", "warn", "error"],
                   "type": "string"
                 },
                 "method": {
@@ -221,19 +276,39 @@
                   "type": "boolean"
                 },
                 "part": {
+                  "maxLength": 64,
+                  "minLength": 1,
                   "type": "string"
                 },
                 "route": {
                   "type": "string"
                 },
                 "session": {
-                  "type": ["string", "null"]
+                  "anyOf": [
+                    {
+                      "maxLength": 200,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
                 },
                 "status": {
                   "type": "number"
                 },
                 "sub": {
-                  "type": ["string", "null"]
+                  "anyOf": [
+                    {
+                      "pattern": "^(usr|svc)_[\\w-]{1,64}$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
                 },
                 "ts": {
                   "type": "string"
@@ -242,12 +317,12 @@
                   "type": "string"
                 },
                 "version": {
+                  "default": "",
+                  "maxLength": 64,
                   "type": "string"
                 }
               },
               "required": [
-                "id",
-                "ts",
                 "level",
                 "kind",
                 "msg",
@@ -258,14 +333,16 @@
                 "agcid",
                 "sub",
                 "session",
+                "fields",
+                "id",
+                "ts",
                 "userType",
                 "client",
                 "method",
                 "route",
                 "status",
                 "ms",
-                "ok",
-                "fields"
+                "ok"
               ],
               "type": "object"
             },
@@ -343,7 +420,6 @@
             "type": "array"
           }
         },
-        "required": ["errors"],
         "type": "object"
       }
     },
@@ -427,18 +503,17 @@
                 "errors",
                 "failed",
                 "requests",
+                "users",
                 "availability",
                 "p50",
                 "p95",
-                "p99",
-                "users"
+                "p99"
               ],
               "type": "object"
             },
             "type": "array"
           }
         },
-        "required": ["stats"],
         "type": "object"
       }
     },

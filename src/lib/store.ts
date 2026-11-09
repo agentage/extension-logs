@@ -3,23 +3,24 @@ import { fail, type Log } from '@agentage/extension';
 import { EVENTS_DDL } from './ddl.js';
 
 export type Params = Record<string, unknown>;
+export type Row = Record<string, unknown>;
 
 // The narrow face of @clickhouse/client the parts use; tests pass a fake.
 export interface Clickhouse {
   command(sql: string): Promise<void>;
   insert(table: string, rows: object[]): Promise<void>;
-  query<T>(sql: string, params?: Params): Promise<T[]>;
+  query<T = Row>(sql: string, params?: Params): Promise<T[]>;
 }
 
 export interface EventsStore {
   ready(): Promise<void>;
   insert(rows: object[]): Promise<void>;
-  query<T>(sql: string, params?: Params): Promise<T[]>;
+  query<T = Row>(sql: string, params?: Params): Promise<T[]>;
 }
 
 const ISO_TS = { date_time_input_format: 'best_effort' } as const;
-// count() is UInt64: a JSON number, not the quoted string ClickHouse sends by default.
-const NUMBERS = { output_format_json_quote_64bit_integers: 0 } as const;
+// Counts as JSON numbers, not quoted UInt64; the server stops a read before the client's 10 s.
+const READS = { output_format_json_quote_64bit_integers: 0, max_execution_time: 9 } as const;
 
 export const clickhouse = (url: string): Clickhouse => {
   // Its own logger writes plain-text lines to stderr; failures reach the part's JSON log instead.
@@ -29,13 +30,13 @@ export const clickhouse = (url: string): Clickhouse => {
   return {
     command: async (query) => void (await client.command({ query })),
     insert: async (table, values) => void (await client.insert({ table, values, ...settings })),
-    query: async <T>(query: string, query_params?: Params) =>
+    query: async <T = Row>(query: string, query_params?: Params) =>
       (
         await client.query({
           query,
           query_params,
           format: 'JSONEachRow',
-          clickhouse_settings: NUMBERS,
+          clickhouse_settings: READS,
         })
       ).json<T>(),
   };

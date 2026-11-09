@@ -19,7 +19,7 @@ describe.runIf(store)('the reads on ClickHouse, over the section 4 visits', () =
 
   it('search: q, level and extension narrow the rows, newest first', async () => {
     expect((await find({})).events).toHaveLength(VISITS.length);
-    const errors = (await find({ level: 'error' })).events.map((e) => e.msg);
+    const errors = (await find({ level: 'error' })).events.map((e) => e['msg']);
     expect(errors).toEqual(['GET /api/v1/machines 502', 'POST /api/v1/emit 500', 'Error: forced']);
     expect((await find({ q: 'MACHINES', extension: 'platform' })).events).toHaveLength(3);
     expect((await find({ q: AGCID })).events).toHaveLength(5);
@@ -29,17 +29,31 @@ describe.runIf(store)('the reads on ClickHouse, over the section 4 visits', () =
     expect((await find({ since: '1m' })).events).toHaveLength(3);
   });
 
-  it('search: limit 2 gives a cursor; the next page has no overlap', async () => {
-    const first = await find({ limit: 2 });
-    const next = await find({ limit: 2, cursor: first.nextCursor });
-    expect(first.nextCursor).toBeTypeOf('string');
-    expect(next.events.map((e) => e.id)).not.toContain(first.events[0]?.id);
-    expect(next.events[0]!.ts <= first.events[1]!.ts).toBe(true);
+  it('search: walking every page at limit 2 over rows with one ts has no gap and no overlap', async () => {
+    const ts = new Date(Date.now() - 120_000).toISOString();
+    const same = [1, 2, 3, 4, 5].map((n) => ({
+      ...VISITS[0],
+      ts,
+      extension: 'paging',
+      agcid: null,
+      user_type: 'test',
+      msg: `page ${n}`,
+    }));
+    await s.insert(same.map(toRow) as object[]);
+    const all = (await find({ extension: 'paging' })).events.map((e) => e['id']);
+    const walked: unknown[] = [];
+    for (let cursor: string | undefined, n = 0; n === 0 || cursor; n++) {
+      const page = await find({ extension: 'paging', limit: 2, ...(cursor && { cursor }) });
+      walked.push(...page.events.map((e) => e['id']));
+      cursor = page.nextCursor;
+    }
+    expect(all).toHaveLength(5);
+    expect(walked).toEqual(all);
   });
 
   it('trace: time order, request hops, an unknown agcid is empty', async () => {
     const found = await R.trace(s, AGCID);
-    expect(found.events.map((e) => e.kind)).toEqual(['http', 'mcp', 'error', 'http', 'http']);
+    expect(found.events.map((e) => e['kind'])).toEqual(['http', 'mcp', 'error', 'http', 'http']);
     expect(found).toMatchObject({ hops: 4, ok: false });
     expect(await R.trace(s, 'f'.repeat(32))).toEqual({
       agcid: 'f'.repeat(32),
@@ -52,7 +66,7 @@ describe.runIf(store)('the reads on ClickHouse, over the section 4 visits', () =
 
   it('stats: a row per route and tool, test traffic out, availability null under 50 requests', async () => {
     const rows = await R.stats(s, { window: '1h' });
-    const machines = rows.find((r) => r.part === 'api' && r.route === '/api/v1/machines');
+    const machines = rows.find((r) => r['part'] === 'api' && r['route'] === '/api/v1/machines');
     expect(machines).toMatchObject({
       extension: 'platform',
       calls: 2,
@@ -62,9 +76,9 @@ describe.runIf(store)('the reads on ClickHouse, over the section 4 visits', () =
       users: 1,
       p95: expect.any(Number),
     });
-    expect(rows.find((r) => r.part === 'edge')).toMatchObject({ failed: 1, requests: 1 });
-    expect(rows.find((r) => r.route === 'probe__echo')).toMatchObject({ kind: 'mcp', calls: 1 });
-    expect(rows.reduce((n, r) => n + r.calls, 0)).toBe(5);
+    expect(rows.find((r) => r['part'] === 'edge')).toMatchObject({ failed: 1, requests: 1 });
+    expect(rows.find((r) => r['route'] === 'probe__echo')).toMatchObject({ kind: 'mcp', calls: 1 });
+    expect(rows.reduce((n, r) => n + Number(r['calls']), 0)).toBe(5);
   });
 
   it('stats: availability is the admin formula from 50 requests', async () => {
@@ -72,7 +86,9 @@ describe.runIf(store)('the reads on ClickHouse, over the section 4 visits', () =
     const fail = { ...line, fields: { ...line.fields, 'http.response.status_code': 503 } };
     await s.insert([...Array(48).fill(line), fail].map(toRow) as object[]);
     const rows = await R.stats(s, { window: '15m' });
-    expect(rows.find((r) => r.route === '/api/v1/machines' && r.part === 'api')).toMatchObject({
+    expect(
+      rows.find((r) => r['route'] === '/api/v1/machines' && r['part'] === 'api')
+    ).toMatchObject({
       requests: 51,
       availability: 1 - 1 / 51,
     });
@@ -80,14 +96,14 @@ describe.runIf(store)('the reads on ClickHouse, over the section 4 visits', () =
 
   it('hosts: the last sample per host, red by age or threshold; containers by cpu', async () => {
     const rows = await R.hosts(s);
-    expect(rows.map((r) => [r.host, r.cpu, r.red])).toEqual([
+    expect(rows.map((r) => [r['host'], r['cpu'], r.red])).toEqual([
       ['next-1', 12.4, false],
       ['next-2', 91, true],
       ['next-gw', 5, true],
     ]);
     expect(rows[0]).toMatchObject({ cpu1h: 31.2, mem: 61, disk: 34.1, load1: 0.42, containers: 2 });
     const inside = await R.containers(s, 'next-1');
-    expect(inside.map((c) => c.name)).toEqual(['root_api.1', 'platform_api.1']);
+    expect(inside.map((c) => c['name'])).toEqual(['root_api.1', 'platform_api.1']);
     expect(await R.containers(s, 'next-9')).toEqual([]);
   });
 

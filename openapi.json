@@ -309,41 +309,87 @@
                       "items": {
                         "type": "object",
                         "properties": {
-                          "id": {
-                            "type": "string"
-                          },
-                          "ts": {
-                            "type": "string"
-                          },
                           "level": {
-                            "type": "string"
+                            "default": "info",
+                            "type": "string",
+                            "enum": ["info", "warn", "error"]
                           },
                           "kind": {
-                            "type": "string"
+                            "type": "string",
+                            "enum": ["http", "mcp", "job", "span", "error", "event", "log"]
                           },
                           "msg": {
                             "type": "string"
                           },
                           "extension": {
-                            "type": "string"
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 64
                           },
                           "part": {
-                            "type": "string"
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 64
                           },
                           "version": {
-                            "type": "string"
+                            "default": "",
+                            "type": "string",
+                            "maxLength": 64
                           },
                           "host": {
-                            "type": "string"
+                            "default": "",
+                            "type": "string",
+                            "maxLength": 253
                           },
                           "agcid": {
-                            "type": ["string", "null"]
+                            "default": null,
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^[0-9a-f]{32}$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "sub": {
-                            "type": ["string", "null"]
+                            "default": null,
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^(usr|svc)_[\\w-]{1,64}$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "session": {
-                            "type": ["string", "null"]
+                            "default": null,
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "fields": {
+                            "default": {},
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "ts": {
+                            "type": "string"
                           },
                           "userType": {
                             "type": "string"
@@ -365,18 +411,9 @@
                           },
                           "ok": {
                             "type": "boolean"
-                          },
-                          "fields": {
-                            "type": "object",
-                            "propertyNames": {
-                              "type": "string"
-                            },
-                            "additionalProperties": {}
                           }
                         },
                         "required": [
-                          "id",
-                          "ts",
                           "level",
                           "kind",
                           "msg",
@@ -387,14 +424,16 @@
                           "agcid",
                           "sub",
                           "session",
+                          "fields",
+                          "id",
+                          "ts",
                           "userType",
                           "client",
                           "method",
                           "route",
                           "status",
                           "ms",
-                          "ok",
-                          "fields"
+                          "ok"
                         ],
                         "additionalProperties": false
                       }
@@ -489,41 +528,87 @@
                           "items": {
                             "type": "object",
                             "properties": {
-                              "id": {
-                                "type": "string"
-                              },
-                              "ts": {
-                                "type": "string"
-                              },
                               "level": {
-                                "type": "string"
+                                "default": "info",
+                                "type": "string",
+                                "enum": ["info", "warn", "error"]
                               },
                               "kind": {
-                                "type": "string"
+                                "type": "string",
+                                "enum": ["http", "mcp", "job", "span", "error", "event", "log"]
                               },
                               "msg": {
                                 "type": "string"
                               },
                               "extension": {
-                                "type": "string"
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 64
                               },
                               "part": {
-                                "type": "string"
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 64
                               },
                               "version": {
-                                "type": "string"
+                                "default": "",
+                                "type": "string",
+                                "maxLength": 64
                               },
                               "host": {
-                                "type": "string"
+                                "default": "",
+                                "type": "string",
+                                "maxLength": 253
                               },
                               "agcid": {
-                                "type": ["string", "null"]
+                                "default": null,
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^[0-9a-f]{32}$"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
                               },
                               "sub": {
-                                "type": ["string", "null"]
+                                "default": null,
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^(usr|svc)_[\\w-]{1,64}$"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
                               },
                               "session": {
-                                "type": ["string", "null"]
+                                "default": null,
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "maxLength": 200
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "fields": {
+                                "default": {},
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {}
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "ts": {
+                                "type": "string"
                               },
                               "userType": {
                                 "type": "string"
@@ -545,18 +630,9 @@
                               },
                               "ok": {
                                 "type": "boolean"
-                              },
-                              "fields": {
-                                "type": "object",
-                                "propertyNames": {
-                                  "type": "string"
-                                },
-                                "additionalProperties": {}
                               }
                             },
                             "required": [
-                              "id",
-                              "ts",
                               "level",
                               "kind",
                               "msg",
@@ -567,14 +643,16 @@
                               "agcid",
                               "sub",
                               "session",
+                              "fields",
+                              "id",
+                              "ts",
                               "userType",
                               "client",
                               "method",
                               "route",
                               "status",
                               "ms",
-                              "ok",
-                              "fields"
+                              "ok"
                             ],
                             "additionalProperties": false
                           }
@@ -706,6 +784,9 @@
                           "requests": {
                             "type": "number"
                           },
+                          "users": {
+                            "type": "number"
+                          },
                           "availability": {
                             "type": ["number", "null"]
                           },
@@ -716,9 +797,6 @@
                             "type": "number"
                           },
                           "p99": {
-                            "type": "number"
-                          },
-                          "users": {
                             "type": "number"
                           }
                         },
@@ -732,11 +810,11 @@
                           "errors",
                           "failed",
                           "requests",
+                          "users",
                           "availability",
                           "p50",
                           "p95",
-                          "p99",
-                          "users"
+                          "p99"
                         ],
                         "additionalProperties": false
                       }

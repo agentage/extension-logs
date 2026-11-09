@@ -13,9 +13,9 @@ export const FILTERS = {
   kind: 'kind = {kind:String}',
   agcid: 'agcid = {agcid:FixedString(32)}',
   host: 'host = {host:String}',
-  since: 'ts >= {since:DateTime64(3)}',
-  until: 'ts < {until:DateTime64(3)}',
-  cursor: '(ts, id) < ({cursorTs:DateTime64(3)}, {cursorId:UUID})',
+  since: "ts >= {since:DateTime64(3, 'UTC')}",
+  until: "ts < {until:DateTime64(3, 'UTC')}",
+  cursorTs: "(ts, id) < ({cursorTs:DateTime64(3, 'UTC')}, {cursorId:UUID})",
 } as const;
 
 export const SEARCH = (where: string) => `SELECT ${COLUMNS} FROM events WHERE ${where}
@@ -34,8 +34,8 @@ export const STATS = (where: string) => `SELECT extension, part, kind, method, r
   if(requests >= 50, 1 - failed / requests, NULL) AS availability,
   quantiles(0.5, 0.95, 0.99)(ms) AS q, uniqExact(sub) AS users
 FROM events
-WHERE kind IN ('http', 'mcp') AND ts >= {since:DateTime64(3)} AND user_type NOT IN ('test', 'service')${where}
-GROUP BY extension, part, kind, method, route ORDER BY calls DESC LIMIT 500`;
+WHERE kind IN ('http', 'mcp') AND ts >= {since:DateTime64(3, 'UTC')} AND user_type NOT IN ('test', 'service')${where}
+GROUP BY extension, part, kind, method, route ORDER BY calls DESC`;
 
 export const HOSTS = `SELECT host,
   argMax(${num('host.cpu_pct')}, ts) AS cpu, avg(${num('host.cpu_pct')}) AS cpu1h,
@@ -57,5 +57,5 @@ export const ERRORS = (
   where: string
 ) => `SELECT ${str('exception.type')} AS type, any(msg) AS sample,
   count() AS count, toString(max(ts)) AS lastSeen, any(agcid) AS agcid
-FROM events WHERE kind = 'error' AND ts >= {since:DateTime64(3)}${where}
+FROM events WHERE kind = 'error' AND ts >= {since:DateTime64(3, 'UTC')}${where}
 GROUP BY type, ${str('agentage.fingerprint')}, normalizeQuery(msg) ORDER BY count DESC LIMIT 20`;

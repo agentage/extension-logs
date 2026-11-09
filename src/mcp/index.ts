@@ -3,76 +3,60 @@ import { type McpContext } from '@agentage/extension';
 import '../lib/secrets.types.js';
 import * as O from '../lib/outputs.schema.js';
 import * as R from '../lib/reads.js';
-import { clickhouse, createEventsStore } from '../lib/store.js';
+import { clickhouse, createEventsStore, type EventsStore } from '../lib/store.js';
 
-const SearchInput = R.SearchSchema.pick({
-  q: true,
-  level: true,
-  extension: true,
-  kind: true,
-  since: true,
-}).extend({ limit: z.int().min(1).max(200).default(20) });
-const HostsInput = z.object({ host: z.string().min(1).max(253).optional() });
+const pick = { q: true, level: true, extension: true, kind: true, since: true } as const;
+const search = R.SearchSchema.pick(pick).extend({ limit: z.int().min(1).max(200).default(20) });
+const hosts = z.object({ host: z.string().min(1).max(253).optional() });
+const list = <T extends z.ZodType>(key: string, row: T) =>
+  z.object({ [key]: z.array(row).optional() });
+type Args = never;
+
+const TOOLS = [
+  {
+    name: 'search',
+    description:
+      'Search logged events, newest first: text in msg or an agcid, level, extension, kind, since (15m, 2h, 7d).',
+    input: search,
+    output: list('events', O.EventOutSchema),
+    run: async (s: EventsStore, a: Args) => ({ events: (await R.search(s, a)).events }),
+  },
+  {
+    name: 'trace',
+    description: 'Every event of one agcid (32 hex) in time order, with hops, ms and ok.',
+    input: z.object({ agcid: R.Agcid }),
+    output: O.TraceOutSchema,
+    run: (s: EventsStore, a: { agcid: string }) => R.trace(s, a.agcid),
+  },
+  {
+    name: 'errors',
+    description: 'Errors grouped by exception type and message: count, last seen, one agcid.',
+    input: R.ErrorsSchema,
+    output: list('errors', O.ErrorOutSchema),
+    run: async (s: EventsStore, a: Args) => ({ errors: await R.errors(s, a) }),
+  },
+  {
+    name: 'stats',
+    description:
+      'Per extension, part, route and tool: calls, errors, availability, p50, p95, p99, users.',
+    input: R.StatsSchema,
+    output: list('stats', O.StatOutSchema),
+    run: async (s: EventsStore, a: Args) => ({ stats: await R.stats(s, a) }),
+  },
+  {
+    name: 'hosts',
+    description:
+      "The last sample per host (cpu, mem, disk, load1, containers, red), or one host's containers.",
+    input: hosts,
+    output: list('hosts', O.HostOutSchema).extend(list('containers', O.ContainerOutSchema).shape),
+    run: async (s: EventsStore, { host }: { host?: string }) =>
+      host ? { containers: await R.containers(s, host) } : { hosts: await R.hosts(s) },
+  },
+] as const;
 
 // Five tools on the api's SQL; every one needs logs:admin.
 export function create({ tool, secrets, log }: McpContext) {
   const store = createEventsStore(clickhouse(secrets.storeUrl), log);
-  const admin = 'admin' as const;
-  tool(
-    'search',
-    {
-      description:
-        'Search logged events, newest first: text in msg or an agcid, level, extension, kind, since (15m, 2h, 7d).',
-      scope: admin,
-      input: SearchInput,
-      output: z.object({ events: z.array(O.EventOutSchema) }),
-    },
-    async (args) => ({ events: (await R.search(store, args)).events })
-  );
-  tool(
-    'trace',
-    {
-      description: 'Every event of one agcid (32 hex) in time order, with hops, ms and ok.',
-      scope: admin,
-      input: z.object({ agcid: R.Agcid }),
-      output: O.TraceOutSchema,
-    },
-    ({ agcid }) => R.trace(store, agcid)
-  );
-  tool(
-    'errors',
-    {
-      description: 'Errors grouped by exception type and message: count, last seen, one agcid.',
-      scope: admin,
-      input: R.ErrorsSchema,
-      output: z.object({ errors: z.array(O.ErrorOutSchema) }),
-    },
-    async (args) => ({ errors: await R.errors(store, args) })
-  );
-  tool(
-    'stats',
-    {
-      description:
-        'Per extension, part, route and tool: calls, errors, availability, p50, p95, p99, users.',
-      scope: admin,
-      input: R.StatsSchema,
-      output: z.object({ stats: z.array(O.StatOutSchema) }),
-    },
-    async (args) => ({ stats: await R.stats(store, args) })
-  );
-  tool(
-    'hosts',
-    {
-      description:
-        "The last sample per host (cpu, mem, disk, load1, containers, red), or one host's containers.",
-      scope: admin,
-      input: HostsInput,
-      output: z.object({
-        hosts: z.array(O.HostOutSchema).optional(),
-        containers: z.array(O.ContainerOutSchema).optional(),
-      }),
-    },
-    async ({ host }) =>
-      host ? { containers: await R.containers(store, host) } : { hosts: await R.hosts(store) }
-  );
+  for (const { name, run, ...spec } of TOOLS)
+    tool(name, { ...spec, scope: 'admin' } as never, ((args: never) => run(store, args)) as never);
 }
