@@ -11,7 +11,7 @@ owns servers, `/health`, auth, the scheduler and the images.
 | api    | [`src/api`](src/api/index.ts)       | `/api/v1/events`, `/traces/{agcid}`, `/stats`, `/hosts`, `openapi.json` |
 | mcp    | [`src/mcp`](src/mcp/index.ts)       | `POST /mcp`: `logs__*` ([`logs.mcpc.json`](logs.mcpc.json))             |
 | worker | [`src/worker`](src/worker/index.ts) | job `retention`, nightly                                                |
-| ui     | [`src/ui`](src/ui/index.ts)         | `/ui/{version}/logs.js`, `harness.html`                                 |
+| ui     | `src/ui` (PR 3)                     | the widgets `events`, `hosts`, `services`                               |
 
 ## Run
 

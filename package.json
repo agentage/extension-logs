@@ -22,7 +22,6 @@
   "agentage": {
     "id": "logs",
     "parts": {
-      "ui": true,
       "api": true,
       "mcp": true,
       "worker": true

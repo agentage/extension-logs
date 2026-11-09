@@ -158,6 +158,903 @@
             }
           }
         }
+      },
+      "get": {
+        "summary": "Search events",
+        "security": [
+          {
+            "pat": ["logs:read"]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "level",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["info", "warn", "error"]
+            }
+          },
+          {
+            "name": "extension",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          },
+          {
+            "name": "part",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["http", "mcp", "job", "span", "error", "event", "log"]
+            }
+          },
+          {
+            "name": "agcid",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{32}$"
+            }
+          },
+          {
+            "name": "host",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": "24h",
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d{1,4}[mhd]$"
+                },
+                {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                }
+              ]
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d{1,4}[mhd]$"
+                },
+                {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                }
+              ]
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "level": {
+                            "default": "info",
+                            "type": "string",
+                            "enum": ["info", "warn", "error"]
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": ["http", "mcp", "job", "span", "error", "event", "log"]
+                          },
+                          "msg": {
+                            "type": "string"
+                          },
+                          "extension": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 64
+                          },
+                          "part": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 64
+                          },
+                          "version": {
+                            "default": "",
+                            "type": "string",
+                            "maxLength": 64
+                          },
+                          "host": {
+                            "default": "",
+                            "type": "string",
+                            "maxLength": 253
+                          },
+                          "agcid": {
+                            "default": null,
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^[0-9a-f]{32}$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "sub": {
+                            "default": null,
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^(usr|svc)_[\\w-]{1,64}$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "session": {
+                            "default": null,
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "fields": {
+                            "default": {},
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "ts": {
+                            "type": "string"
+                          },
+                          "userType": {
+                            "type": "string"
+                          },
+                          "client": {
+                            "type": "string"
+                          },
+                          "method": {
+                            "type": "string"
+                          },
+                          "route": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "number"
+                          },
+                          "ms": {
+                            "type": "number"
+                          },
+                          "ok": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "level",
+                          "kind",
+                          "msg",
+                          "extension",
+                          "part",
+                          "version",
+                          "host",
+                          "agcid",
+                          "sub",
+                          "session",
+                          "fields",
+                          "id",
+                          "ts",
+                          "userType",
+                          "client",
+                          "method",
+                          "route",
+                          "status",
+                          "ms",
+                          "ok"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": ["success", "data"]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/traces/{agcid}": {
+      "get": {
+        "summary": "Trace one agcid",
+        "security": [
+          {
+            "pat": ["logs:read"]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "agcid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "agcid": {
+                          "type": "string"
+                        },
+                        "hops": {
+                          "type": "number"
+                        },
+                        "ms": {
+                          "type": "number"
+                        },
+                        "ok": {
+                          "type": "boolean"
+                        },
+                        "events": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "level": {
+                                "default": "info",
+                                "type": "string",
+                                "enum": ["info", "warn", "error"]
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": ["http", "mcp", "job", "span", "error", "event", "log"]
+                              },
+                              "msg": {
+                                "type": "string"
+                              },
+                              "extension": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 64
+                              },
+                              "part": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 64
+                              },
+                              "version": {
+                                "default": "",
+                                "type": "string",
+                                "maxLength": 64
+                              },
+                              "host": {
+                                "default": "",
+                                "type": "string",
+                                "maxLength": 253
+                              },
+                              "agcid": {
+                                "default": null,
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^[0-9a-f]{32}$"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "sub": {
+                                "default": null,
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^(usr|svc)_[\\w-]{1,64}$"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "session": {
+                                "default": null,
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "maxLength": 200
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "fields": {
+                                "default": {},
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {}
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "ts": {
+                                "type": "string"
+                              },
+                              "userType": {
+                                "type": "string"
+                              },
+                              "client": {
+                                "type": "string"
+                              },
+                              "method": {
+                                "type": "string"
+                              },
+                              "route": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "number"
+                              },
+                              "ms": {
+                                "type": "number"
+                              },
+                              "ok": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "level",
+                              "kind",
+                              "msg",
+                              "extension",
+                              "part",
+                              "version",
+                              "host",
+                              "agcid",
+                              "sub",
+                              "session",
+                              "fields",
+                              "id",
+                              "ts",
+                              "userType",
+                              "client",
+                              "method",
+                              "route",
+                              "status",
+                              "ms",
+                              "ok"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": ["agcid", "hops", "ms", "ok", "events"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["success", "data"]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/stats": {
+      "get": {
+        "summary": "Calls, errors, availability, latency",
+        "security": [
+          {
+            "pat": ["logs:admin"]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "window",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": "1h",
+              "type": "string",
+              "enum": ["15m", "1h", "24h"]
+            }
+          },
+          {
+            "name": "extension",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "extension": {
+                            "type": "string"
+                          },
+                          "part": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "method": {
+                            "type": "string"
+                          },
+                          "route": {
+                            "type": "string"
+                          },
+                          "calls": {
+                            "type": "number"
+                          },
+                          "errors": {
+                            "type": "number"
+                          },
+                          "failed": {
+                            "type": "number"
+                          },
+                          "requests": {
+                            "type": "number"
+                          },
+                          "users": {
+                            "type": "number"
+                          },
+                          "availability": {
+                            "type": ["number", "null"]
+                          },
+                          "p50": {
+                            "type": "number"
+                          },
+                          "p95": {
+                            "type": "number"
+                          },
+                          "p99": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "extension",
+                          "part",
+                          "kind",
+                          "method",
+                          "route",
+                          "calls",
+                          "errors",
+                          "failed",
+                          "requests",
+                          "users",
+                          "availability",
+                          "p50",
+                          "p95",
+                          "p99"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": ["success", "data"]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/hosts": {
+      "get": {
+        "summary": "The last sample per host",
+        "security": [
+          {
+            "pat": ["logs:admin"]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "host": {
+                            "type": "string"
+                          },
+                          "cpu": {
+                            "type": ["number", "null"]
+                          },
+                          "cpu1h": {
+                            "type": ["number", "null"]
+                          },
+                          "mem": {
+                            "type": ["number", "null"]
+                          },
+                          "disk": {
+                            "type": ["number", "null"]
+                          },
+                          "load1": {
+                            "type": ["number", "null"]
+                          },
+                          "containers": {
+                            "type": ["number", "null"]
+                          },
+                          "at": {
+                            "type": "string"
+                          },
+                          "red": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "host",
+                          "cpu",
+                          "cpu1h",
+                          "mem",
+                          "disk",
+                          "load1",
+                          "containers",
+                          "at",
+                          "red"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": ["success", "data"]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/hosts/{host}/containers": {
+      "get": {
+        "summary": "The containers of one host",
+        "security": [
+          {
+            "pat": ["logs:admin"]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "host",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 253
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "cpu": {
+                            "type": ["number", "null"]
+                          },
+                          "mem": {
+                            "type": ["number", "null"]
+                          },
+                          "limit": {
+                            "type": ["number", "null"]
+                          }
+                        },
+                        "required": ["name", "cpu", "mem", "limit"],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": ["success", "data"]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
       }
     }
   }

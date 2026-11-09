@@ -1,24 +1,22 @@
-import { createTestContext } from '@agentage/extension';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { clickhouse, createEventsStore } from '../lib/store.js';
+import { testStore } from '../lib/clickhouse.fixture.js';
 import { OLDEST } from '../worker/retention.js';
 import { LINES } from './lines.fixture.js';
 import { toRow } from './rows.js';
 
 // Against a real ClickHouse 26.8 (CI service, or docker locally); skipped without CLICKHOUSE_URL.
-const url = process.env['CLICKHOUSE_URL'];
-const ch = url ? clickhouse(url) : undefined;
-const store = ch && createEventsStore(ch, createTestContext().log);
+const db = testStore(process.env['CLICKHOUSE_URL'], 'logs_ingest');
+const store = db?.store;
 const raw = { ...LINES.log, msg: 'LOG: checkpoint complete', fields: { 'agentage.raw': true } };
 
 describe.runIf(store)('the events table on ClickHouse', () => {
   beforeAll(async () => {
-    await ch?.command('DROP TABLE IF EXISTS events');
+    await db?.reset();
     await store?.ready();
     await store?.ready();
     await store?.insert([...Object.values(LINES), raw].map(toRow) as object[]);
   });
-  afterAll(() => ch?.command('DROP TABLE IF EXISTS events'));
+  afterAll(() => db?.drop());
 
   it('stores one row per line, with the time and the agcid as sent', async () => {
     const rows = await store!.query<{ kind: string; ts: string; agcid: string | null }>(
