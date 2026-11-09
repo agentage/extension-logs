@@ -1,6 +1,6 @@
 // Lines as the kit and the shipper write them (logs-events section 2), one per kind.
 const base = {
-  ts: '2026-11-10T09:12:03.412Z',
+  ts: new Date(Date.now() - 60_000).toISOString(),
   level: 'info',
   extension: 'probe',
   part: 'api',

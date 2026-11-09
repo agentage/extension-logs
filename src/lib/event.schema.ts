@@ -6,10 +6,16 @@ export const KINDS = ['http', 'mcp', 'job', 'span', 'error', 'event', 'log'] as 
 export const USER_TYPES = ['user', 'agent', 'automation', 'service', 'test', 'bot'] as const;
 
 const name = z.string().min(1).max(64);
+const DAY = 86_400_000;
+// Inside the TTL and at most an hour ahead: one row outside would fail its whole batch insert.
+const recent = (ts: string) => {
+  const at = Date.parse(ts);
+  return at >= Date.now() - 30 * DAY && at <= Date.now() + DAY / 24;
+};
 const optional = z.string().max(200).nullable().default(null);
 
 export const EventSchema = z.object({
-  ts: z.iso.datetime({ offset: true }),
+  ts: z.iso.datetime({ offset: true }).refine(recent, 'ts outside the last 30 days'),
   level: z.enum(LEVELS).default('info'),
   kind: z.enum(KINDS),
   msg: z.string(),
@@ -22,7 +28,11 @@ export const EventSchema = z.object({
     .regex(/^[0-9a-f]{32}$/)
     .nullable()
     .default(null),
-  sub: optional,
+  sub: z
+    .string()
+    .regex(/^(usr|svc)_[\w-]{1,64}$/)
+    .nullable()
+    .default(null),
   session: optional,
   user_type: z.enum(USER_TYPES).or(z.literal('')).default(''),
   client: optional,

@@ -51,6 +51,17 @@ describe('a line to a row', () => {
     ['no ts', { ...LINES.log, ts: undefined }],
     ['an unknown kind', { ...LINES.log, kind: 'trace' }],
     ['an agcid that is not 32 hex', { ...LINES.log, agcid: 'abc' }],
+    [
+      'a ts older than 30 days',
+      { ...LINES.log, ts: new Date(Date.now() - 31 * 86_400_000).toISOString() },
+    ],
+    [
+      'a ts over an hour ahead',
+      { ...LINES.log, ts: new Date(Date.now() + 2 * 3_600_000).toISOString() },
+    ],
+    ['a year outside the store range', { ...LINES.log, ts: '9999-01-01T00:00:00Z' }],
+    ['a sub that is an email', { ...LINES.log, sub: 'someone@example.com' }],
+    ['a sub without usr_ or svc_', { ...LINES.log, sub: 'tok_1' }],
     ['not an object', 'a line'],
   ])('refuses %s', (_name, line) => {
     expect(toRow(line)).toBeNull();

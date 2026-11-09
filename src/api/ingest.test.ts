@@ -38,6 +38,12 @@ describe('POST /api/v1/events', () => {
     ]);
   });
 
+  it('counts a row outside the 30-day window as rejected, never a 500 for the batch', async () => {
+    const old = { ...LINES.log, ts: '2020-01-01T00:00:00Z' };
+    const res = await post([old, LINES.log]);
+    expect(await res.json()).toEqual(ok({ accepted: 1, rejected: 1 }));
+  });
+
   it('inserts nothing when every row is refused', async () => {
     expect(await (await post([{}])).json()).toEqual(ok({ accepted: 0, rejected: 1 }));
     expect(store.insert).not.toHaveBeenCalled();

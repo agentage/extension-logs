@@ -36,7 +36,7 @@ describe.runIf(store)('the events table on ClickHouse', () => {
     ]);
     expect(rows[0]).toEqual({
       kind: 'error',
-      ts: '2026-11-10 09:12:03.412',
+      ts: LINES.error.ts.replace('T', ' ').replace('Z', ''),
       agcid: LINES.error.agcid,
     });
     expect(rows.filter((row) => row.agcid === null)).toHaveLength(1);
@@ -51,6 +51,6 @@ describe.runIf(store)('the events table on ClickHouse', () => {
 
   it('answers the retention check with the oldest partition', async () => {
     const [row] = await store!.query<{ oldest: string }>(OLDEST);
-    expect(row?.oldest).toBe('2026-11-10');
+    expect(row?.oldest).toBe(LINES.log.ts.slice(0, 10));
   });
 });

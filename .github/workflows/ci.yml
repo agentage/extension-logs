@@ -99,7 +99,7 @@ jobs:
         run: |
           set -euo pipefail
           T=$(node_modules/.bin/agentage extension token --scope logs:write)
-          line='{"ts":"2026-11-10T09:12:03.412Z","kind":"log","msg":"ci ingest","extension":"logs","part":"ci"}'
+          line="{\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%S.000Z)\",\"kind\":\"log\",\"msg\":\"ci ingest\",\"extension\":\"logs\",\"part\":\"ci\"}"
           curl -sf -H "authorization: Bearer $T" -H 'content-type: application/json' \
             -d "[$line,$line]" localhost:4280/api/v1/events | tee /dev/stderr | jq -e '.data == {accepted: 2, rejected: 0}'
           n=$(docker exec logs-store clickhouse-client --password local -q "SELECT count() FROM events WHERE msg = 'ci ingest'")
