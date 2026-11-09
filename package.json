@@ -22,6 +22,7 @@
   "agentage": {
     "id": "logs",
     "parts": {
+      "ui": true,
       "api": true,
       "mcp": true,
       "worker": true
@@ -50,7 +51,8 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test --pass-with-no-tests",
     "verify": "npm run type-check && npm run lint && npm run format:check && npm run test:coverage && npm run build",
-    "prepublishOnly": "npm run verify"
+    "prepublishOnly": "npm run verify",
+    "harness:seed": "node scripts/harness-seed.mjs"
   },
   "dependencies": {
     "@agentage/extension": "0.11.0",
