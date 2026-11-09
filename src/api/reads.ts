@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { fail, reply, type ApiContext, type Caller } from '@agentage/extension';
+import { reply, type ApiContext } from '@agentage/extension';
 import * as O from '../lib/outputs.schema.js';
 import * as R from '../lib/reads.js';
 import { type EventsStore } from '../lib/store.js';
@@ -7,15 +7,7 @@ import { type EventsStore } from '../lib/store.js';
 interface Req {
   input: never;
   params: Record<string, string>;
-  caller: Caller;
 }
-const insufficient = { 'WWW-Authenticate': 'Bearer error="insufficient_scope", scope="logs:read"' };
-
-// The kit ranks write above read; a shipper's logs:write token must not read the rows back.
-const reader = ({ scopes }: Caller) => {
-  if (!scopes.includes('logs:read') && !scopes.includes('logs:admin'))
-    throw fail('FORBIDDEN', 'Needs logs:read', { headers: insufficient });
-};
 
 const page = async (store: EventsStore, input: R.Search) => {
   const { events, nextCursor } = await R.search(store, input);
@@ -26,11 +18,12 @@ const page = async (store: EventsStore, input: R.Search) => {
 
 const agcid = z.object({ agcid: R.Agcid });
 const host = z.object({ host: z.string().min(1).max(253) });
+// Any account can mint logs:read for itself, so every read needs logs:admin.
 const READS = [
   {
     path: '/events',
     summary: 'Search events',
-    scope: 'read',
+    scope: 'admin',
     input: R.SearchSchema,
     output: z.array(O.EventOutSchema),
     run: (s: EventsStore, r: Req) => page(s, r.input),
@@ -38,7 +31,7 @@ const READS = [
   {
     path: '/traces/{agcid}',
     summary: 'Trace one agcid',
-    scope: 'read',
+    scope: 'admin',
     params: agcid,
     output: O.TraceOutSchema,
     run: (s: EventsStore, r: Req) => R.trace(s, r.params['agcid'] ?? ''),
@@ -70,13 +63,5 @@ const READS = [
 
 export const reads = (route: ApiContext['route'], store: EventsStore) => {
   for (const { run, path, ...spec } of READS)
-    route(
-      'get',
-      path,
-      spec as never,
-      ((req: Req) => {
-        if (spec.scope === 'read') reader(req.caller);
-        return run(store, req);
-      }) as never
-    );
+    route('get', path, spec as never, ((req: Req) => run(store, req)) as never);
 };

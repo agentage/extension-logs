@@ -98,7 +98,11 @@ jobs:
       - name: Ingest through the gateway lands in ClickHouse (p0 ingest, local)
         run: |
           set -euo pipefail
-          T=$(node_modules/.bin/agentage extension token --scope logs:write)
+          # Ingest takes a svc_ subject: the dev issuer sets sub, the token command does not.
+          T=$(curl -sf -H 'content-type: application/json' -d '{"scope":"logs:write","sub":"svc_ci"}' localhost:4281/token | jq -r .token)
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H "authorization: Bearer $(node_modules/.bin/agentage extension token --scope logs:write)" \
+            -H 'content-type: application/json' -d '[]' localhost:4280/api/v1/events)
+          echo "usr_ subject with logs:write: $code"; test "$code" = 403
           line="{\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%S.000Z)\",\"kind\":\"log\",\"msg\":\"ci ingest\",\"extension\":\"logs\",\"part\":\"ci\"}"
           curl -sf -H "authorization: Bearer $T" -H 'content-type: application/json' \
             -d "[$line,$line]" localhost:4280/api/v1/events | tee /dev/stderr | jq -e '.data == {accepted: 2, rejected: 0}'

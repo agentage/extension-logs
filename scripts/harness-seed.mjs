@@ -1,5 +1,4 @@
 // Seeds a local `up` for the widget harness: 100 mixed lines, 5 host samples (one red), containers.
-import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 
 const BASE = process.env.LOGS_URL ?? 'http://localhost:4280';
@@ -8,11 +7,14 @@ const ISSUER = process.env.LOGS_ISSUER ?? 'http://localhost:4281';
 for (const url of [BASE, ISSUER])
   if (!['localhost', '127.0.0.1'].includes(new URL(url).hostname))
     throw new Error(`harness-seed posts to localhost or 127.0.0.1 only, not ${url}`);
-const token = execFileSync('node_modules/.bin/agentage', [
-  ...['extension', 'token', '--scope', 'logs:write', '--issuer', ISSUER],
-])
-  .toString()
-  .trim();
+// Ingest takes a svc_ subject only; the dev issuer sets sub, the token command does not.
+const minted = await fetch(`${ISSUER}/token`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ scope: 'logs:write', sub: 'svc_seed' }),
+});
+if (!minted.ok) throw new Error(`the dev issuer at ${ISSUER} refused: ${minted.status}`);
+const { token } = await minted.json();
 
 const now = Date.now();
 const ago = (s) => new Date(now - s * 1000).toISOString();

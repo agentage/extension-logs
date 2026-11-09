@@ -69,4 +69,18 @@ describe('POST /api/v1/events', () => {
     await server?.close();
     expect((await post([LINES.log], as('logs:read'))).status).toBe(403);
   });
+
+  it.each([
+    ['usr_dev', 'logs:write'],
+    ['usr_dev', 'logs:admin'],
+    ['svc', 'logs:write'],
+  ])('refuses subject %s with %s: 403 FORBIDDEN, nothing inserted', async (sub, scope) => {
+    const res = await post([LINES.log], { sub, scopes: [scope] });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({
+      success: false,
+      error: { code: 'FORBIDDEN', message: 'ingest needs a service token' },
+    });
+    expect(store.insert).not.toHaveBeenCalled();
+  });
 });

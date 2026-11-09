@@ -72,7 +72,7 @@ const slowly = async (route: Route) => {
 const open = async (
   page: Page,
   widget: string,
-  mode: 'data' | 'empty' | 'error' | 'hang' = 'data',
+  mode: 'data' | 'empty' | 'error' | 'forbidden' | 'hang' = 'data',
   slow = ''
 ) => {
   const seen: string[] = [];
@@ -81,6 +81,10 @@ const open = async (
     seen.push(url.pathname + url.search);
     if (mode === 'hang') return;
     if (url.pathname + url.search === slow) return slowly(route);
+    if (mode === 'forbidden')
+      return route.fulfill(
+        json({ success: false, error: { code: 'FORBIDDEN', message: 'Needs logs:admin' } }, 403)
+      );
     if (mode === 'error')
       return route.fulfill(
         json({ success: false, error: { code: 'UNAVAILABLE', message: 'store down' } }, 503)
@@ -104,6 +108,10 @@ for (const widget of ['events', 'hosts', 'services']) {
       .withTags(WCAG)
       .analyze();
     expect(violations.map((violation) => violation.id)).toEqual([]);
+  });
+  test(`${widget}: a token without logs:admin is named in the alert`, async ({ page }) => {
+    const { el } = await open(page, widget, 'forbidden');
+    await expect(el.getByRole('alert')).toHaveText('Could not load: Needs logs:admin');
   });
   for (const colorScheme of ['light', 'dark'] as const)
     test(`${widget}: rows with the red rule, axe WCAG A/AA clean (${colorScheme})`, async ({

@@ -48,8 +48,8 @@ interface Body {
 
 describe('the read routes', () => {
   it.each([
-    ['/events', 'logs:read', 200],
-    [`/traces/${A}`, 'logs:read', 200],
+    ['/events', 'logs:read', 403],
+    [`/traces/${A}`, 'logs:read', 403],
     ['/events', 'logs:write', 403],
     [`/traces/${A}`, 'logs:write', 403],
     ['/stats', 'logs:write', 403],
@@ -59,6 +59,8 @@ describe('the read routes', () => {
     ['/stats', 'logs:admin', 200],
     ['/hosts', 'logs:admin', 200],
     ['/events', 'logs:admin', 200],
+    [`/traces/${A}`, 'logs:admin', 200],
+    ['/hosts/next-1/containers', 'logs:admin', 200],
   ])('GET %s with %s answers %i', async (path, scope, status) => {
     expect((await get(path, as(scope))).status).toBe(status);
   });
@@ -72,7 +74,9 @@ describe('the read routes', () => {
 
   it('pages /events: camelCase rows, meta.pagination with a cursor when more rows exist', async () => {
     query.mockResolvedValueOnce([row, { ...row, id: 'x' }]);
-    const body = (await (await get('/events?limit=1&level=error', as('logs:read'))).json()) as Body;
+    const body = (await (
+      await get('/events?limit=1&level=error', as('logs:admin'))
+    ).json()) as Body;
     expect(body.data[0]).toMatchObject({ ts: '2026-11-10T09:12:03.412Z', userType: 'agent' });
     expect(body.meta.pagination).toEqual({ limit: 1, nextCursor: expect.any(String) });
     expect(query).toHaveBeenLastCalledWith(
@@ -81,11 +85,10 @@ describe('the read routes', () => {
     );
   });
 
-  it('refuses logs:write with the insufficient_scope header the kit sends', async () => {
-    const res = await get('/events', as('logs:write'));
-    expect(res.headers.get('www-authenticate')).toBe(
-      'Bearer error="insufficient_scope", scope="logs:read"'
-    );
+  // The kit's test caller sends no WWW-Authenticate; the real check adds scope="logs:admin".
+  it.each(['logs:read', 'logs:write'])('refuses %s as FORBIDDEN, Needs logs:admin', async (s) => {
+    const body = await (await get('/events', as(s))).json();
+    expect(body).toMatchObject({ error: { code: 'FORBIDDEN', message: 'Needs logs:admin' } });
   });
 
   it.each([
@@ -101,7 +104,7 @@ describe('the read routes', () => {
 
   it('traces a known agcid: hops, ms, ok', async () => {
     query.mockResolvedValueOnce([row, { ...row, kind: 'span', ts: '2026-11-10 09:12:03.450' }]);
-    const body = (await (await get(`/traces/${A}`, as('logs:read'))).json()) as Body;
+    const body = (await (await get(`/traces/${A}`, as('logs:admin'))).json()) as Body;
     expect(body.data).toMatchObject({ agcid: A, hops: 1, ms: 40, ok: true });
   });
 });
