@@ -18,6 +18,8 @@ export interface EventsStore {
 }
 
 const ISO_TS = { date_time_input_format: 'best_effort' } as const;
+// count() is UInt64: a JSON number, not the quoted string ClickHouse sends by default.
+const NUMBERS = { output_format_json_quote_64bit_integers: 0 } as const;
 
 export const clickhouse = (url: string): Clickhouse => {
   // Its own logger writes plain-text lines to stderr; failures reach the part's JSON log instead.
@@ -28,7 +30,14 @@ export const clickhouse = (url: string): Clickhouse => {
     command: async (query) => void (await client.command({ query })),
     insert: async (table, values) => void (await client.insert({ table, values, ...settings })),
     query: async <T>(query: string, query_params?: Params) =>
-      (await client.query({ query, query_params, format: 'JSONEachRow' })).json<T>(),
+      (
+        await client.query({
+          query,
+          query_params,
+          format: 'JSONEachRow',
+          clickhouse_settings: NUMBERS,
+        })
+      ).json<T>(),
   };
 };
 
