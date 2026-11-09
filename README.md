@@ -32,7 +32,7 @@ cpu 92) with their containers, and the services rows (one red by availability, o
 ```bash
 npx agentage extension up                # needs a ClickHouse for store-url, see ci.yml
 npm run harness:seed                     # LOGS_URL and LOGS_ISSUER override 4280 and 4281
-open "http://localhost:4280/ui/$(jq -r .version package.json)/harness.html?widget=events&scope=logs:admin"
+echo "http://localhost:4280/ui/$(jq -r .version package.json)/harness.html?widget=events&scope=logs:admin"
 ```
 
 `?widget=events|hosts|services` picks one widget, `?scope=logs:admin` makes the dev issuer mint

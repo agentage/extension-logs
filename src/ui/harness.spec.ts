@@ -92,6 +92,10 @@ for (const widget of ['events', 'hosts', 'services']) {
     await expect(empty.el).toContainText('No rows');
     const failed = await open(await context.newPage(), widget, 'error');
     await expect(failed.el.getByRole('alert')).toHaveText('Could not load: store down');
+    const { violations } = await new AxeBuilder({ page: failed.el.page() })
+      .withTags(WCAG)
+      .analyze();
+    expect(violations.map((violation) => violation.id)).toEqual([]);
   });
   for (const colorScheme of ['light', 'dark'] as const)
     test(`${widget}: rows with the red rule, axe WCAG A/AA clean (${colorScheme})`, async ({

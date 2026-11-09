@@ -36,8 +36,8 @@ tr.red td{color:var(--color-destructive);font-weight:600}tr.red td:first-child{b
 
 const Note = ({ span, children, alert }: { span: number; children: string; alert?: boolean }) => (
   <tr>
-    <td colSpan={span} role={alert ? 'alert' : undefined}>
-      {children}
+    <td colSpan={span}>
+      <span role={alert ? 'alert' : undefined}>{children}</span>
     </td>
   </tr>
 );
