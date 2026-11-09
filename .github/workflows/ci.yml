@@ -18,6 +18,18 @@ jobs:
     name: Verify
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # src/api/clickhouse.test.ts runs the DDL, the insert and the reads against the real store.
+    services:
+      clickhouse:
+        image: clickhouse/clickhouse-server:26.8
+        env:
+          CLICKHOUSE_PASSWORD: ci
+        ports: ['8123:8123']
+        options: >-
+          --health-cmd "clickhouse-client --password ci -q 'SELECT 1'"
+          --health-interval 5s --health-retries 20
+    env:
+      CLICKHOUSE_URL: http://default:ci@localhost:8123
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -73,9 +85,25 @@ jobs:
           npm ci --prefix e2e-suite --no-audit --no-fund
           npx --prefix e2e-suite playwright install chromium
 
+      # up has no clickhouse store kind yet (kit 0.11): the parts reach this one through the docker host.
+      - name: ClickHouse 26.8 for the parts
+        run: docker run -d --name logs-store -p 8123:8123 -e CLICKHOUSE_PASSWORD=local clickhouse/clickhouse-server:26.8
+
       # The cli and its kit come from this lockfile: a cli or kit patch needs a commit here.
       - name: agentage extension up (the release recipes, store, dev issuer, gateway)
+        env:
+          AGENTAGE_SECRET_STORE_URL: http://default:local@172.17.0.1:8123
         run: node_modules/.bin/agentage extension up
+
+      - name: Ingest through the gateway lands in ClickHouse (p0 ingest, local)
+        run: |
+          set -euo pipefail
+          T=$(node_modules/.bin/agentage extension token --scope logs:write)
+          line="{\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%S.000Z)\",\"kind\":\"log\",\"msg\":\"ci ingest\",\"extension\":\"logs\",\"part\":\"ci\"}"
+          curl -sf -H "authorization: Bearer $T" -H 'content-type: application/json' \
+            -d "[$line,$line]" localhost:4280/api/v1/events | tee /dev/stderr | jq -e '.data == {accepted: 2, rejected: 0}'
+          n=$(docker exec logs-store clickhouse-client --password local -q "SELECT count() FROM events WHERE msg = 'ci ingest'")
+          echo "rows: $n"; test "$n" = 2
 
       - name: The widget a11y test through the local gateway (src/**/*.spec.ts)
         run: npm run test:e2e
