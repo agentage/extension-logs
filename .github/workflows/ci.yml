@@ -75,6 +75,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: agentage/e2e
+          ref: feature/logs-admin-reads
           path: e2e-suite
           token: ${{ secrets.PAT_TOKEN }}
           persist-credentials: false
