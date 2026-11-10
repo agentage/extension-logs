@@ -58,7 +58,7 @@
     "zod": "^4.2.0"
   },
   "devDependencies": {
-    "@agentage/cli": "0.50.3",
+    "@agentage/cli": "0.50.4",
     "@agentage/widget": "^0.3.0",
     "@axe-core/playwright": "4.14.0",
     "@playwright/test": "1.64.1",
@@ -87,9 +87,6 @@
   "overrides": {
     "eslint-plugin-jsx-a11y": {
       "eslint": "$eslint"
-    },
-    "@agentage/cli": {
-      "@agentage/extension": "$@agentage/extension"
     }
   }
 }
