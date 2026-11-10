@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { KINDS, LEVELS } from './event.schema.js';
+import { KINDS, LEVELS } from '@agentage/extension/logs';
 import * as SQL from './reads.sql.js';
 import { type EventsStore, type Row } from './store.js';
 

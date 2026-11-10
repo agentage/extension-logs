@@ -34,17 +34,17 @@ describe('a line to a row', () => {
   });
 
   it('fills what a line may leave out, and stores an unknown client as empty', () => {
-    const { ts, kind, msg, extension, part } = LINES.log;
-    expect(toRow({ ts, kind, msg, extension, part })).toMatchObject({
-      level: 'info',
+    const { ts, level, kind, msg, extension, part } = LINES.log;
+    expect(toRow({ ts, level, kind, msg, extension, part })).toMatchObject({
       version: '',
       host: '',
       agcid: null,
       sub: null,
-      user_type: '',
+      user_type: 'service',
       client: '',
       fields: {},
     });
+    expect(toRow({ ts, kind, msg, extension, part }), 'no level').toBeNull();
   });
 
   it.each([

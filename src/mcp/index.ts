@@ -1,9 +1,9 @@
 import { z } from 'zod';
 import { type McpContext } from '@agentage/extension';
-import '../lib/secrets.types.js';
 import * as O from '../lib/outputs.schema.js';
 import * as R from '../lib/reads.js';
-import { clickhouse, createEventsStore, type EventsStore } from '../lib/store.js';
+import { readConnection } from '../lib/connection.js';
+import { clickhouse, lazy, createEventsStore, type EventsStore } from '../lib/store.js';
 
 const pick = { q: true, level: true, extension: true, kind: true, since: true } as const;
 const search = R.SearchSchema.pick(pick).extend({ limit: z.int().min(1).max(200).default(20) });
@@ -55,8 +55,11 @@ const TOOLS = [
 ] as const;
 
 // Five tools on the api's SQL; every one needs logs:admin.
-export function create({ tool, secrets, log }: McpContext) {
-  const store = createEventsStore(clickhouse(secrets.storeUrl), log);
+export function create({ tool, log }: McpContext) {
+  const store = createEventsStore(
+    lazy(() => clickhouse(readConnection()), log),
+    log
+  );
   for (const { name, run, ...spec } of TOOLS)
     tool(name, { ...spec, scope: 'admin' } as never, ((args: never) => run(store, args)) as never);
 }

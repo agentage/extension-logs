@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { testStore } from '../lib/clickhouse.fixture.js';
+import { clickhouseCheck } from '../lib/store.js';
 import { OLDEST } from '../worker/retention.js';
 import { LINES } from './lines.fixture.js';
 import { toRow } from './rows.js';
@@ -17,6 +18,10 @@ describe.runIf(store)('the events table on ClickHouse', () => {
     await store?.insert([...Object.values(LINES), raw].map(toRow) as object[]);
   });
   afterAll(() => db?.drop());
+
+  it('answers checks.clickhouse ok', async () => {
+    expect(await clickhouseCheck(db!.ch)()).toBe('ok');
+  });
 
   it('stores one row per line, with the time and the agcid as sent', async () => {
     const rows = await store!.query<{ kind: string; ts: string; agcid: string | null }>(

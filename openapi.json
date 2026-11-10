@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "logs",
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
   "components": {
     "securitySchemes": {
@@ -32,7 +32,7 @@
               },
               "agcid": {
                 "type": "string",
-                "pattern": "^[A-Za-z0-9._:-]{8,128}$"
+                "pattern": "^[0-9a-f]{32}$"
               },
               "details": {
                 "anyOf": [
@@ -310,7 +310,6 @@
                         "type": "object",
                         "properties": {
                           "level": {
-                            "default": "info",
                             "type": "string",
                             "enum": ["info", "warn", "error"]
                           },
@@ -319,7 +318,8 @@
                             "enum": ["http", "mcp", "job", "span", "error", "event", "log"]
                           },
                           "msg": {
-                            "type": "string"
+                            "type": "string",
+                            "maxLength": 2000
                           },
                           "extension": {
                             "type": "string",
@@ -337,7 +337,6 @@
                             "maxLength": 64
                           },
                           "host": {
-                            "default": "",
                             "type": "string",
                             "maxLength": 253
                           },
@@ -358,7 +357,7 @@
                             "anyOf": [
                               {
                                 "type": "string",
-                                "pattern": "^(usr|svc)_[\\w-]{1,64}$"
+                                "maxLength": 128
                               },
                               {
                                 "type": "null"
@@ -370,7 +369,7 @@
                             "anyOf": [
                               {
                                 "type": "string",
-                                "maxLength": 200
+                                "maxLength": 128
                               },
                               {
                                 "type": "null"
@@ -420,7 +419,6 @@
                           "extension",
                           "part",
                           "version",
-                          "host",
                           "agcid",
                           "sub",
                           "session",
@@ -529,7 +527,6 @@
                             "type": "object",
                             "properties": {
                               "level": {
-                                "default": "info",
                                 "type": "string",
                                 "enum": ["info", "warn", "error"]
                               },
@@ -538,7 +535,8 @@
                                 "enum": ["http", "mcp", "job", "span", "error", "event", "log"]
                               },
                               "msg": {
-                                "type": "string"
+                                "type": "string",
+                                "maxLength": 2000
                               },
                               "extension": {
                                 "type": "string",
@@ -556,7 +554,6 @@
                                 "maxLength": 64
                               },
                               "host": {
-                                "default": "",
                                 "type": "string",
                                 "maxLength": 253
                               },
@@ -577,7 +574,7 @@
                                 "anyOf": [
                                   {
                                     "type": "string",
-                                    "pattern": "^(usr|svc)_[\\w-]{1,64}$"
+                                    "maxLength": 128
                                   },
                                   {
                                     "type": "null"
@@ -589,7 +586,7 @@
                                 "anyOf": [
                                   {
                                     "type": "string",
-                                    "maxLength": 200
+                                    "maxLength": 128
                                   },
                                   {
                                     "type": "null"
@@ -639,7 +636,6 @@
                               "extension",
                               "part",
                               "version",
-                              "host",
                               "agcid",
                               "sub",
                               "session",

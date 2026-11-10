@@ -1,8 +1,12 @@
 import { createTestContext } from '@agentage/extension';
 import { describe, expect, it, vi } from 'vitest';
 import { type EventsStore } from '../lib/store.js';
-import { create } from './index.js';
 import { OLDEST, retention } from './retention.js';
+
+vi.mock('../lib/connection.js', () => ({
+  readConnection: () => ({ url: 'http://ch:8123', username: 'u', password: 'p', database: 'd' }),
+}));
+const { create } = await import('./index.js');
 
 const run = async (rows: object[]) => {
   const ctx = createTestContext();
@@ -14,7 +18,7 @@ const run = async (rows: object[]) => {
 
 describe('worker retention', () => {
   it('runs nightly at 03:17 UTC with a 60 s timeout', () => {
-    const ctx = createTestContext({ secrets: { storeUrl: 'http://ch:8123' } });
+    const ctx = createTestContext();
     create(ctx);
     expect(ctx.jobs).toEqual([
       { name: 'retention', cron: '17 3 * * *', options: { timeout: '60s' } },

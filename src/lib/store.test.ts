@@ -1,7 +1,7 @@
 import { createTestContext } from '@agentage/extension';
 import { describe, expect, it, vi } from 'vitest';
 import { EVENTS_DDL } from './ddl.js';
-import { createEventsStore, isOutage, type Clickhouse } from './store.js';
+import { createEventsStore, isOutage, lazy, type Clickhouse } from './store.js';
 
 const refused = Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' });
 
@@ -10,6 +10,7 @@ const fake = (command = vi.fn(async () => undefined)) => {
     command,
     insert: vi.fn(async () => undefined),
     query: vi.fn(async () => []),
+    ping: vi.fn(async () => true),
   };
   return { ch, store: createEventsStore(ch, createTestContext().log) };
 };
@@ -44,5 +45,29 @@ describe('the events store', () => {
     [null, false],
   ])('tells an outage from a fault (%#)', (err, outage) => {
     expect(isOutage(err)).toBe(outage);
+  });
+});
+
+describe('the lazy client', () => {
+  it('opens on first use, once', async () => {
+    const { ch } = fake();
+    const open = vi.fn(() => ch);
+    const client = lazy(open, createTestContext().log);
+    expect(open).not.toHaveBeenCalled();
+    await client.query('SELECT 1');
+    await client.ping();
+    expect(open).toHaveBeenCalledTimes(1);
+  });
+
+  it('logs and rejects while the store is not mounted, and opens once it is', async () => {
+    const ctx = createTestContext();
+    const { ch } = fake();
+    const open = vi.fn<() => Clickhouse>().mockImplementationOnce(() => {
+      throw new Error('/run/secrets/store-url has no value: the store is not mounted');
+    });
+    const client = lazy(open.mockReturnValue(ch), ctx.log);
+    await expect(client.ping()).rejects.toThrow('not mounted');
+    expect(ctx.logs.map((l) => l.level)).toContain('error');
+    await expect(client.ping()).resolves.toBe(true);
   });
 });

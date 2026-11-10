@@ -26,10 +26,9 @@ describe('the manifest', () => {
   it('is valid and declares exactly the parts whose folders exist', () => {
     const manifest = validateManifest(pkg);
     expect(imageParts(manifest)).toEqual(folders);
-    const store = has('../migrations') ? { store: 'postgres' } : {};
     const cli = has('cli') ? { cli: true } : {};
     const parts = Object.fromEntries(folders.map((part) => [part, true]));
-    expect(manifest.agentage.parts).toEqual({ ...parts, ...cli, ...store });
+    expect(manifest.agentage.parts).toEqual({ ...parts, ...cli, store: 'clickhouse' });
     expect(manifest.agentage.commands?.map(({ name }) => name)).toEqual(
       has('cli') ? ['ping'] : undefined
     );

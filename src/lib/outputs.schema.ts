@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { EventSchema } from './event.schema.js';
+import { EventSchema } from '@agentage/extension/logs';
 
 const text = z.string();
 const num = z.number();
