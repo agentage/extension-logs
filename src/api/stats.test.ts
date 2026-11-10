@@ -72,6 +72,14 @@ describe('GET /stats with kind', () => {
     expect(query).not.toHaveBeenCalled();
   });
 
+  it('a list of kinds that measure differently answers 400 naming why', async () => {
+    const { error } = await body('/stats?kind=http,job');
+    expect(error.details).toEqual([
+      { field: 'kind', message: expect.stringMatching(/^http and job have different measures/) },
+    ]);
+    expect(query).not.toHaveBeenCalled();
+  });
+
   it('a wrong sort answers 400 with the names the kind allows', async () => {
     const { error } = await body('/stats?kind=host&sort=calls');
     expect(error.code).toBe('VALIDATION_ERROR');
@@ -94,6 +102,12 @@ describe('GET /stats with kind', () => {
     '/events?kind=hosts',
     '/events?status=70000',
     '/events?sub=a%40b.c',
+    '/stats?kind=http,mcp%3B%20--',
+    '/stats?kind=http&under=1)%20OR%201%3D1',
+    '/stats?kind=event&name=',
+    '/stats?kind=http&ok=1%20OR%201%3D1',
+    '/events?sort=ms%3B%20--',
+    '/events?ok=maybe',
   ])('refuses %s with 400 before the store', async (path) => {
     expect((await get(path)).status).toBe(400);
     expect(query).not.toHaveBeenCalled();

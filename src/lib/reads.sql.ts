@@ -16,20 +16,39 @@ export const FILTERS = {
   route: 'route = {route:String}',
   status: 'status = {status:UInt16}',
   user_type: 'user_type = {user_type:String}',
+  ok: 'ok = {ok:Bool}',
+  name: `${str('event.name')} = {name:String}`,
   since: "ts >= {since:DateTime64(3, 'UTC')}",
   until: "ts < {until:DateTime64(3, 'UTC')}",
 } as const;
 
-// Newest first, or oldest first; the cursor is the (ts, id) of the last row of the page before.
-export const ORDERS = {
-  desc: { by: 'ts DESC, id DESC', after: '<' },
-  asc: { by: 'ts ASC, id ASC', after: '>' },
+// By time or by duration, ties by (ts, id); the cursor is that tuple of the page's last row.
+export const KEYS = {
+  ts: { ts: "{cursorTs:DateTime64(3, 'UTC')}", id: '{cursorId:UUID}' },
+  ms: { ms: '{cursorMs:UInt32}', ts: "{cursorTs:DateTime64(3, 'UTC')}", id: '{cursorId:UUID}' },
 } as const;
-export const AFTER = (order: keyof typeof ORDERS) =>
-  `(ts, id) ${ORDERS[order].after} ({cursorTs:DateTime64(3, 'UTC')}, {cursorId:UUID})`;
+export const ORDERS = {
+  desc: { dir: 'DESC', after: '<' },
+  asc: { dir: 'ASC', after: '>' },
+} as const;
+export type SortKey = keyof typeof KEYS;
+type Dir = keyof typeof ORDERS;
 
-export const SEARCH = (where: string, order: keyof typeof ORDERS) => `SELECT ${COLUMNS} FROM events
-WHERE ${where} ORDER BY ${ORDERS[order].by} LIMIT {limit:UInt32}`;
+// The builder trusts no caller: a sort or order outside the two tables never becomes SQL.
+const known = (sort: SortKey, order: Dir) => {
+  if (!Object.hasOwn(KEYS, sort) || !Object.hasOwn(ORDERS, order))
+    throw new Error('SEARCH: a sort or order outside the closed lists');
+  return Object.entries(KEYS[sort]);
+};
+export const AFTER = (sort: SortKey, order: Dir) => {
+  const keys = known(sort, order);
+  return `(${keys.map(([k]) => k).join(', ')}) ${ORDERS[order].after} (${keys.map(([, p]) => p).join(', ')})`;
+};
+export const SEARCH = (where: string, order: Dir, sort: SortKey = 'ts') => {
+  const by = known(sort, order).map(([k]) => `${k} ${ORDERS[order].dir}`);
+  return `SELECT ${COLUMNS} FROM events
+WHERE ${where} ORDER BY ${by.join(', ')} LIMIT {limit:UInt32}`;
+};
 
 export const TRACE = `SELECT ${COLUMNS} FROM events WHERE agcid = {agcid:FixedString(32)}
 ORDER BY ts, id LIMIT 1000`;

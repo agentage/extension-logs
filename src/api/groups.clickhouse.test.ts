@@ -44,7 +44,7 @@ describe.runIf(s)('GET /stats with kind on ClickHouse', () => {
       users: 1,
     });
     expect(at('edge', '/api/v1/machines')).toMatchObject({ failed: 1, requests: 1 });
-    expect(at('api', '/busy')).toMatchObject({ calls: 60, failed: 1, availability: 1 - 1 / 60 });
+    expect(at('api', '/busy')).toMatchObject({ calls: 60, failed: 1, availability: 0.9833 });
     expect(rows.find((r) => r['extension'] === 'probe')).toMatchObject({ calls: 1, failed: 1 });
     expect(meta).toEqual({
       ...{ kind: 'http', by: ['extension', 'part', 'route'], sort: 'calls', order: 'desc' },

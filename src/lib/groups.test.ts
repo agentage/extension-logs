@@ -73,7 +73,7 @@ describe('the /stats query rules', () => {
     [{ kind: 'http', sort: 'calls DESC; --' }, 'sort: sort takes'],
     [{ kind: 'http', by: 'route', sort: 'status' }, 'sort: sort takes'],
     [{ kind: 'host', sort: 'bucket' }, 'sort: sort takes cpu'],
-    [{ kind: 'http', bucket: '1d' }, 'bucket: '],
+    [{ kind: 'http', bucket: '2d' }, 'bucket: '],
     [{ kind: 'http', bucket: '1m) OR 1=1 --' }, 'bucket: '],
     [{ kind: "http' OR '1'='1" }, 'kind: '],
     [{ kind: 'users' }, 'kind: '],
