@@ -1,7 +1,7 @@
 {
   "serverInfo": {
     "name": "agentage-logs",
-    "version": "0.2.0"
+    "version": "0.2.1"
   },
   "tools": [
     {
@@ -420,7 +420,7 @@
       }
     },
     {
-      "description": "Per extension, part, route and tool: calls, errors, availability, p50, p95, p99, users.",
+      "description": "Per extension, part, route and tool: calls, errors, availability, p50, p95, p99, users; at most 200 routes per part and 1000 in all, with a note when cut.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
@@ -442,6 +442,9 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
+          "note": {
+            "type": "string"
+          },
           "stats": {
             "items": {
               "additionalProperties": false,
@@ -519,8 +522,7 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
           "host": {
-            "maxLength": 253,
-            "minLength": 1,
+            "pattern": "^(?!.*\\.\\.)[A-Za-z0-9][\\w.-]{0,252}$",
             "type": "string"
           }
         },

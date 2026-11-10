@@ -10,6 +10,10 @@ vi.mock('../lib/connection.js', () => ({ readConnection: () => ({}) }));
 const { create } = await import('./index.js');
 
 const ctx = () => createTestContext();
+const STAT = {
+  ...{ extension: 'x', part: 'edge', kind: 'http', method: 'GET', calls: 1, errors: 0 },
+  ...{ failed: 0, requests: 1, users: 0, availability: null, q: [1, 2, 3] },
+};
 let server: Awaited<ReturnType<typeof startTestMcp>>;
 beforeAll(async () => {
   server = await startTestMcp({ create, ctx: ctx() });
@@ -46,6 +50,14 @@ describe('the logs tools', () => {
   it('errors, stats and hosts answer their rows', async () => {
     expect(await server.call('errors', {})).toEqual({ errors: [] });
     expect(await server.call('stats', { window: '24h' })).toEqual({ stats: [] });
+    const many = Array.from({ length: 201 }, (_, i) => ({ ...STAT, route: `/${i}` }));
+    query.mockResolvedValueOnce(many);
+    const cut = (await server.call('stats', { window: '24h' })) as {
+      stats: object[];
+      note: string;
+    };
+    expect(cut.stats).toHaveLength(200);
+    expect(cut.note).toMatch(/^truncated: /);
     expect(await server.call('hosts', {})).toEqual({ hosts: [] });
     query.mockResolvedValueOnce([{ name: 'root_api.1', cpu: 7.5, mem: 1, limit: 2 }]);
     expect(await server.call('hosts', { host: 'next-1' })).toEqual({
@@ -55,4 +67,13 @@ describe('the logs tools', () => {
       host: 'next-1',
     });
   });
+
+  it.each([{ host: '../x' }, { host: 'a/b' }])(
+    'hosts refuses %o before the store',
+    async (args) => {
+      query.mockClear();
+      await expect(server.call('hosts', args)).rejects.toThrow();
+      expect(query).not.toHaveBeenCalled();
+    }
+  );
 });

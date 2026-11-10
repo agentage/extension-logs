@@ -11,6 +11,7 @@ const MAX_DAYS = 31;
 // Checks the TTL dropped the partitions past 30 days; the run itself is the job row.
 export const retention = (store: EventsStore, log: Log) => async () => {
   const [row] = await store.query<{ oldest: string; days: number }>(OLDEST);
-  if (row && row.days > MAX_DAYS) throw new Error(`partition ${row.oldest} outlived the TTL`);
-  log.info('retention ok', { oldest: row?.oldest ?? null, days: row?.days ?? 0 });
+  if (!row) return log.info('retention: no partitions yet, nothing to check');
+  if (row.days > MAX_DAYS) throw new Error(`partition ${row.oldest} outlived the TTL`);
+  log.info('retention ok', { oldest: row.oldest, days: row.days });
 };

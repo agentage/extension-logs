@@ -1,5 +1,5 @@
 import { pct, serviceReasons, services, type Service, type Stat } from './rules.js';
-import { mapLoad, Table, useApi, type Row } from './table.js';
+import { mapLoad, Table, useTool, type Row } from './table.js';
 
 const COLS = {
   'extension/part': 0,
@@ -22,8 +22,10 @@ const serviceRow = (s: Service): Row => ({
   ],
 });
 
+// logs__stats, not GET /stats: the bridge drops meta, the tool's note says the rows were cut.
 export function Services() {
-  const load = useApi<Stat[]>('/stats?window=24h');
-  const rows = mapLoad(load, (stats) => services(stats).map(serviceRow));
-  return <Table caption="services, 24 h" cols={COLS} load={rows} />;
+  const load = useTool<{ stats?: Stat[]; note?: string }>('logs__stats', { window: '24h' });
+  const rows = mapLoad(load, ({ stats = [] }) => services(stats).map(serviceRow));
+  const note = load.state === 'ready' && load.data.note ? `, ${load.data.note}` : '';
+  return <Table caption={`services, 24 h${note}`} cols={COLS} load={rows} />;
 }

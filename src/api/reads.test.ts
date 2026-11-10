@@ -28,7 +28,10 @@ const row = {
 const query = vi.fn(async (): Promise<object[]> => []);
 const store = { query } as unknown as EventsStore;
 let server: Awaited<ReturnType<typeof startTestServer>> | undefined;
-afterEach(() => server?.close());
+afterEach(async () => {
+  await server?.close();
+  query.mockClear();
+});
 
 const get = async (path: string, caller: Caller | null) => {
   server = await startTestServer({
@@ -98,8 +101,75 @@ describe('the read routes', () => {
     '/events?since=yesterday',
     `/traces/xyz`,
     '/stats?window=2d',
-  ])('refuses %s with 400', async (path) => {
-    expect((await get(path, as('logs:admin'))).status).toBe(400);
+    `/events?q=${'x'.repeat(10_240)}`,
+    '/events?limit=0',
+    '/events?limit=-1',
+    '/events?limit=1000000000',
+    '/events?since=2026-11-10T10:00:00Z&until=2026-11-01T00:00:00Z',
+    `/events?agcid=${'a'.repeat(31)}`,
+    `/events?agcid=${'a'.repeat(33)}`,
+    `/traces/${'a'.repeat(33)}`,
+    '/events?host=a%2Fb',
+    '/events?host=..',
+    '/hosts/a%2Fb/containers',
+    '/hosts/..%2Fevents/containers',
+    '/hosts/next..1/containers',
+  ])('refuses %s with 400 VALIDATION_ERROR', async (path) => {
+    const res = await get(path, as('logs:admin'));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'VALIDATION_ERROR' } });
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it.each(['/events?since=3650d', '/events?since=2016-01-01T00:00:00Z'])(
+    'answers a 10-year window %s with 200: the table holds 30 days',
+    async (path) => {
+      expect((await get(path, as('logs:admin'))).status).toBe(200);
+    }
+  );
+
+  it('answers a cursor from another query with 200, a page from that point', async () => {
+    const other = cursor(['2026-11-10 09:12:03.412', row.id]);
+    expect((await get(`/events?level=error&cursor=${other}`, as('logs:admin'))).status).toBe(200);
+  });
+
+  it('answers a store fault as 500 Internal error: no SQL, no store URL, no stack', async () => {
+    const sql = 'Code: 62. Syntax error: SELECT id FROM events at http://logs:pw@logs_store:8123';
+    query.mockRejectedValueOnce(Object.assign(new Error(sql), { code: '62' }));
+    const res = await get('/events', as('logs:admin'));
+    const text = await res.text();
+    expect(res.status).toBe(500);
+    expect(JSON.parse(text)).toMatchObject({
+      error: { code: 'INTERNAL', message: 'Internal error' },
+    });
+    expect(text).not.toMatch(/SELECT|logs_store|pw@|at .*\.js/);
+  });
+
+  it.each([
+    [
+      '201 routes of one part',
+      Array.from({ length: 201 }, (_, i) => ({ part: 'edge', route: `/${i}` })),
+      200,
+    ],
+    ['1001 parts', Array.from({ length: 1001 }, (_, i) => ({ part: `p${i}`, route: '/' })), 1000],
+  ])('caps /stats at %s and sets meta.truncated', async (_, rows, kept) => {
+    const stat = { extension: 'x', kind: 'http', method: 'GET', calls: 1, errors: 0, failed: 0 };
+    const full = rows.map((r) => ({
+      ...stat,
+      ...r,
+      requests: 1,
+      users: 0,
+      availability: null,
+      q: [1, 2, 3],
+    }));
+    query.mockResolvedValueOnce(full);
+    const body = (await (await get('/stats', as('logs:admin'))).json()) as Body;
+    expect(body.data).toHaveLength(kept);
+    expect(body.meta).toEqual({ truncated: true });
+    query.mockResolvedValueOnce(full.slice(0, 3));
+    expect(((await (await get('/stats', as('logs:admin'))).json()) as Body).meta).toEqual({
+      truncated: false,
+    });
   });
 
   it('traces a known agcid: hops, ms, ok', async () => {

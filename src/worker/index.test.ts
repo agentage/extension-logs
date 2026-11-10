@@ -1,4 +1,4 @@
-import { createTestContext } from '@agentage/extension';
+import { createTestContext, fail } from '@agentage/extension';
 import { describe, expect, it, vi } from 'vitest';
 import { type EventsStore } from '../lib/store.js';
 import { OLDEST, retention } from './retention.js';
@@ -13,7 +13,7 @@ const run = async (rows: object[]) => {
   const query = vi.fn(async () => rows);
   const store = { query } as unknown as EventsStore;
   ctx.schedule('retention', '17 3 * * *', retention(store, ctx.log));
-  return { run: await ctx.runJob('retention'), query };
+  return { run: await ctx.runJob('retention'), query, ctx };
 };
 
 describe('worker retention', () => {
@@ -31,8 +31,25 @@ describe('worker retention', () => {
     expect(query).toHaveBeenCalledWith(OLDEST);
   });
 
-  it('passes on an empty table', async () => {
-    expect((await run([])).run).toMatchObject({ status: 'ok' });
+  it('passes on an empty table and says there was nothing to check', async () => {
+    const { run: done, ctx } = await run([]);
+    expect(done).toMatchObject({ status: 'ok' });
+    expect(ctx.logs.map((l) => l.message)).toContain(
+      'retention: no partitions yet, nothing to check'
+    );
+  });
+
+  it('fails cleanly while the store is down and passes on the next run', async () => {
+    const ctx = createTestContext();
+    const down = fail('UNAVAILABLE', 'The store is unavailable');
+    const query = vi.fn().mockRejectedValueOnce(down).mockResolvedValue([]);
+    ctx.schedule(
+      'retention',
+      '17 3 * * *',
+      retention({ query } as unknown as EventsStore, ctx.log)
+    );
+    expect(await ctx.runJob('retention')).toMatchObject({ status: 'failed' });
+    expect(await ctx.runJob('retention')).toMatchObject({ status: 'ok' });
   });
 
   it('fails when a partition outlived the TTL', async () => {

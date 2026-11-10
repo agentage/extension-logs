@@ -1,4 +1,4 @@
-import { createTestContext, ok, startTestServer, type Caller } from '@agentage/extension';
+import { createTestContext, fail, ok, startTestServer, type Caller } from '@agentage/extension';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type EventsStore } from '../lib/store.js';
 import { ingest } from './ingest.js';
@@ -53,6 +53,30 @@ describe('POST /api/v1/events', () => {
     expect((await post(Array(1000).fill(LINES.log))).status).toBe(200);
     await server?.close();
     expect((await post(Array(1001).fill(LINES.log))).status).toBe(400);
+  });
+
+  it('takes 1000 lines just under 1 MB in one insert', async () => {
+    const line = { ...LINES.log, msg: 'm'.repeat(200), fields: { a: 'v'.repeat(500) } };
+    const body = Array(1000).fill(line);
+    expect(JSON.stringify(body).length).toBeGreaterThan(900_000);
+    expect(await (await post(body)).json()).toEqual(ok({ accepted: 1000, rejected: 0 }));
+    expect(store.insert).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    [fail('UNAVAILABLE', 'The store is unavailable'), 503, 'The store is unavailable'],
+    [
+      new Error('Code: 27. Cannot parse input http://logs:pw@logs_store:8123'),
+      500,
+      'Internal error',
+    ],
+  ])('answers a failed insert as an error, never accepted (%#)', async (err, status, message) => {
+    store.insert.mockRejectedValueOnce(err);
+    const res = await post([LINES.log]);
+    const text = await res.text();
+    expect(res.status).toBe(status);
+    expect(JSON.parse(text)).toMatchObject({ success: false, error: { message } });
+    expect(text).not.toMatch(/accepted|Code: 27|logs_store|pw@/);
   });
 
   it('refuses a body that is not an array with 400', async () => {

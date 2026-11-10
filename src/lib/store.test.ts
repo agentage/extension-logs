@@ -1,8 +1,16 @@
+import { createServer, type Server } from 'node:net';
 import { createTestContext } from '@agentage/extension';
-import { describe, expect, it, vi } from 'vitest';
-import { EVENTS_DDL } from './ddl.js';
+import { afterAll, describe, expect, it, vi } from 'vitest';
+import { DEDUP_SETTING, EVENTS_DDL, EVENTS_DEDUP, SHOW_EVENTS } from './ddl.js';
 import { readConnection } from './connection.js';
-import { clickhouse, createEventsStore, isOutage, lazy, type Clickhouse } from './store.js';
+import {
+  clickhouse,
+  clickhouseCheck,
+  createEventsStore,
+  isOutage,
+  lazy,
+  type Clickhouse,
+} from './store.js';
 
 const refused = Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' });
 
@@ -20,17 +28,51 @@ describe('the events store', () => {
   it('runs the DDL once, before the first use', async () => {
     const { ch, store } = fake();
     await Promise.all([store.ready(), store.insert([{ a: 1 }]), store.query('SELECT 1')]);
-    expect(ch.command).toHaveBeenCalledTimes(1);
-    expect(ch.command).toHaveBeenCalledWith(EVENTS_DDL);
-    expect(ch.insert).toHaveBeenCalledWith('events', [{ a: 1 }]);
+    expect(vi.mocked(ch.command).mock.calls).toEqual([[EVENTS_DDL], [EVENTS_DEDUP]]);
+    expect(ch.query).toHaveBeenCalledWith(SHOW_EVENTS);
+    expect(ch.insert).toHaveBeenCalledWith(
+      'events',
+      [{ a: 1 }],
+      expect.stringMatching(/^[0-f]{64}$/)
+    );
   });
+
+  it('skips the ALTER when the table already has the setting', async () => {
+    const { ch, store } = fake();
+    const statement = `CREATE TABLE logs.events (...) SETTINGS index_granularity = 8192, ${DEDUP_SETTING}`;
+    vi.mocked(ch.query).mockResolvedValueOnce([{ statement }]);
+    await store.ready();
+    expect(vi.mocked(ch.command).mock.calls).toEqual([[EVENTS_DDL]]);
+  });
+
+  it('gives the same batch the same token and another batch another', async () => {
+    const { ch, store } = fake();
+    await store.insert([{ a: 1 }]);
+    await store.insert([{ a: 1 }]);
+    await store.insert([{ a: 2 }]);
+    const tokens = vi.mocked(ch.insert).mock.calls.map((call) => call[2]);
+    expect(tokens[0]).toBe(tokens[1]);
+    expect(tokens[2]).not.toBe(tokens[0]);
+  });
+
+  it.each(['159', '202', '241', '252', '396'])(
+    'answers a store limit (code %s) as UNAVAILABLE busy, never a 500',
+    async (code) => {
+      const { ch, store } = fake();
+      vi.mocked(ch.query).mockRejectedValueOnce(Object.assign(new Error('limit'), { code }));
+      await expect(store.query('SELECT 1')).rejects.toMatchObject({
+        code: 'UNAVAILABLE',
+        message: 'The store is busy: narrow the query or retry',
+      });
+    }
+  );
 
   it('answers UNAVAILABLE while the store is down, and runs the DDL again when it is back', async () => {
     const command = vi.fn().mockRejectedValueOnce(refused).mockResolvedValue(undefined);
     const { ch, store } = fake(command);
     await expect(store.ready()).rejects.toMatchObject({ code: 'UNAVAILABLE' });
     await store.insert([]);
-    expect(ch.command).toHaveBeenCalledTimes(2);
+    expect(ch.command).toHaveBeenCalledTimes(3);
   });
 
   it('passes a SQL error through as it is', async () => {
@@ -78,7 +120,36 @@ describe('the lazy client', () => {
     const ctx = createTestContext();
     const client = lazy(() => clickhouse(readConnection(() => 'postgres://u:secret@h/d')), ctx.log);
     await expect(client.query('SELECT 1')).rejects.toMatchObject({ code: 'UNAVAILABLE' });
-    await expect(client.insert('events', [])).rejects.toMatchObject({ code: 'UNAVAILABLE' });
+    await expect(client.insert('events', [], 't')).rejects.toMatchObject({ code: 'UNAVAILABLE' });
     expect(JSON.stringify(ctx.logs)).not.toContain('secret');
+  });
+});
+
+describe('the client against a store that never answers or is not there', () => {
+  const hung: Server = createServer(() => undefined).listen(0);
+  afterAll(() => void hung.close());
+  const at = (port: number) => ({
+    url: `http://127.0.0.1:${port}`,
+    username: 'u',
+    password: 'p',
+    database: 'd',
+  });
+  const port = () => (hung.address() as { port: number }).port;
+
+  it('gives up on a hung store at its timeout: query, insert and ping are UNAVAILABLE', async () => {
+    const store = createEventsStore(clickhouse(at(port()), 300), createTestContext().log);
+    const started = Date.now();
+    await expect(store.query('SELECT 1')).rejects.toMatchObject({ code: 'UNAVAILABLE' });
+    await expect(store.insert([{ a: 1 }])).rejects.toMatchObject({ code: 'UNAVAILABLE' });
+    expect(Date.now() - started).toBeLessThan(2_000);
+    await expect(clickhouseCheck(clickhouse(at(port()), 300))()).resolves.toBe('unavailable');
+  });
+
+  it('answers UNAVAILABLE at once on a closed port', async () => {
+    const closed = createServer().listen(0);
+    const free = (closed.address() as { port: number }).port;
+    closed.close();
+    const store = createEventsStore(clickhouse(at(free), 300), createTestContext().log);
+    await expect(store.query('SELECT 1')).rejects.toMatchObject({ code: 'UNAVAILABLE' });
   });
 });

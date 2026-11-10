@@ -7,7 +7,7 @@ import { type EventsStore } from '../lib/store.js';
 
 const pick = { q: true, level: true, extension: true, kind: true, since: true } as const;
 const search = R.SearchSchema.pick(pick).extend({ limit: z.int().min(1).max(200).default(20) });
-const hosts = z.object({ host: z.string().min(1).max(253).optional() });
+const hosts = z.object({ host: R.Host.optional() });
 const many = <T extends z.ZodType>(row: T) => z.array(row).optional();
 type Args = never;
 
@@ -37,10 +37,13 @@ const TOOLS = [
   {
     name: 'stats',
     description:
-      'Per extension, part, route and tool: calls, errors, availability, p50, p95, p99, users.',
+      'Per extension, part, route and tool: calls, errors, availability, p50, p95, p99, users; at most 200 routes per part and 1000 in all, with a note when cut.',
     input: R.StatsSchema,
-    output: z.object({ stats: many(O.StatOutSchema) }),
-    run: async (s: EventsStore, a: Args) => ({ stats: await R.stats(s, a) }),
+    output: z.object({ stats: many(O.StatOutSchema), note: z.string().optional() }),
+    run: async (s: EventsStore, a: Args) => {
+      const { stats, truncated } = await R.stats(s, a);
+      return { stats, ...(truncated && { note: R.TRUNCATED }) };
+    },
   },
   {
     name: 'hosts',
