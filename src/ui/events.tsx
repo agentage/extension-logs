@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import type { z } from 'zod';
 import type * as O from '../lib/outputs.schema.js';
-import { clock, type Stat } from './rules.js';
-import { Back, Link, mapLoad, Table, useApi, type Row } from './table.js';
+import { clock, traceHead } from './rules.js';
+import { Back, Link, mapLoad, Table, useApi, useApis, type Row } from './table.js';
 
 type Event = z.output<typeof O.EventOutSchema>;
-type Trace = z.output<typeof O.TraceOutSchema>;
 type Filter = { q: string; level: string; extension: string };
 const LEVELS = ['', 'info', 'warn', 'error'];
 const COLS = { ts: 8, level: 5, 'extension/part': 14, kind: 5, msg: 0, agcid: 12 };
@@ -26,11 +25,14 @@ const row = (e: Event, open?: (agcid: string) => void): Row => ({
   ],
 });
 
+// One agcid in time order over the table's 30 days.
+const traceOf = (agcid: string) =>
+  `/events?agcid=${encodeURIComponent(agcid)}&order=asc&since=30d&limit=1000`;
+
 function TraceList({ agcid, back }: { agcid: string; back: () => void }) {
-  const load = useApi<Trace>(`/traces/${encodeURIComponent(agcid)}`);
-  const t = load.state === 'ready' ? load.data : undefined;
-  const rows = mapLoad(load, (tr) => tr.events.map((e) => row(e)));
-  const head = t ? ` ${t.hops} hops · ${t.ms} ms · ${t.ok ? 'ok' : 'failed'}` : '';
+  const load = useApi<Event[]>(traceOf(agcid));
+  const rows = mapLoad(load, (events) => events.map((e) => row(e)));
+  const head = load.state === 'ready' ? traceHead(load.data) : '';
   return (
     <>
       <Back back={back} text={`agcid ${agcid}${head}`} />
@@ -58,10 +60,13 @@ const Pick = ({ name, options, filter, set }: PickProps) => (
   </label>
 );
 
-// The extension options are every extension /stats knows, so one can switch directly.
+// The extension options are every extension with requests or tool calls in 24 h.
+const KNOWN = ['http', 'mcp'].map(
+  (kind) => `/stats?kind=${kind}&by=extension&since=24h&limit=1000`
+);
 const useExtensions = (selected: string) => {
-  const load = useApi<Stat[]>('/stats?window=24h');
-  const known = load.state === 'ready' ? load.data.map((s) => s.extension) : [];
+  const load = useApis<{ extension: string }[]>(KNOWN);
+  const known = load.state === 'ready' ? load.data.flat().map((s) => s.extension) : [];
   return [...new Set(['', selected, ...known])].sort();
 };
 

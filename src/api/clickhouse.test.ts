@@ -87,6 +87,14 @@ describe.runIf(store)('the events table on ClickHouse', () => {
     expect(await store!.query('SELECT number FROM numbers(10000)')).toHaveLength(10000);
   });
 
+  it('a GROUP BY past 100000 groups throws at the server as UNAVAILABLE busy', async () => {
+    const sql = 'SELECT count() FROM (SELECT number FROM numbers(100001) GROUP BY number)';
+    await expect(store!.query(sql)).rejects.toMatchObject({
+      code: 'UNAVAILABLE',
+      message: 'The store is busy: narrow the query or retry',
+    });
+  });
+
   it('answers a read over its limits as UNAVAILABLE busy, never a 500', async () => {
     const sql =
       "SELECT number FROM numbers(10) SETTINGS max_result_rows = 1, result_overflow_mode = 'throw'";

@@ -57,6 +57,31 @@ describe.runIf(store)('the reads on ClickHouse, over the section 4 visits', () =
     expect(walked).toEqual(all);
   });
 
+  it('search: the trace as rows, oldest first, paged by a cursor in that order', async () => {
+    const all = (await find({ agcid: AGCID, order: 'asc' })).events.map((e) => e['kind']);
+    expect(all).toEqual(['http', 'mcp', 'error', 'http', 'http']);
+    const walked: unknown[] = [];
+    for (let cursor: string | undefined, n = 0; n === 0 || cursor; n++) {
+      const page = await find({ agcid: AGCID, order: 'asc', limit: 2, ...(cursor && { cursor }) });
+      walked.push(...page.events.map((e) => e['kind']));
+      cursor = page.nextCursor;
+    }
+    expect(walked).toEqual(all);
+  });
+
+  it('search: host and container kinds, sub, route and status narrow the rows', async () => {
+    expect((await find({ kind: 'host' })).events.map((e) => e['host'])).toEqual([
+      'next-2',
+      'next-1',
+      'next-gw',
+      'next-1',
+    ]);
+    expect((await find({ kind: 'container' })).events).toHaveLength(2);
+    expect((await find({ sub: 'usr_7f3a' })).events).toHaveLength(1);
+    const failed = await find({ route: '/api/v1/machines', status: 502 });
+    expect(failed.events.map((e) => e['part'])).toEqual(['edge']);
+  });
+
   it('trace: time order, request hops, an unknown agcid is empty', async () => {
     const found = await R.trace(s, AGCID);
     expect(found.events.map((e) => e['kind'])).toEqual(['http', 'mcp', 'error', 'http', 'http']);

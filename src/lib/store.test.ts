@@ -56,7 +56,7 @@ describe('the events store', () => {
     expect(tokens[2]).not.toBe(tokens[0]);
   });
 
-  it.each(['159', '202', '241', '173', '252', '396'])(
+  it.each(['159', '202', '241', '173', '252', '396', '158'])(
     'answers a store limit (code %s) as UNAVAILABLE busy, never a 500',
     async (code) => {
       const { ch, store } = fake();
