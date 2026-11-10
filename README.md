@@ -1,8 +1,8 @@
 # extension-logs
 
 The logs extension: every part's telemetry line (one JSON line per unit of work) lands in one
-ClickHouse `events` table; the api serves ingest, search, trace, stats and hosts, the mcp part
-five tools on the same SQL, the worker a nightly `retention` check, the ui three widgets. Each
+ClickHouse `events` table; the api serves ingest and two reads (rows and groups, below) beside
+the 0.2 trace and hosts routes, the mcp part seven tools on the same SQL, the worker a nightly `retention` check, the ui three widgets. Each
 part is only `create(ctx)`; the kit [`@agentage/extension`](https://github.com/agentage/platform)
 owns servers, `/health`, auth, the scheduler and the images.
 
@@ -40,7 +40,53 @@ Every read runs with `max_execution_time` 9 s, `max_memory_usage` 256 MB and `ma
 read answers 503 `UNAVAILABLE` "The store is busy: narrow the query or retry". `/stats` returns
 at most 200 routes per part (so edge routes cannot crowd out a part's quiet ones) and 1000 rows
 in all, by calls; when it cut a row it says so: `meta.truncated: true` on `GET /stats`, a `note` on
-`logs__stats`, and the `services` widget (which reads `logs__stats`) shows that note in its caption.
+`logs__stats`. The groups form of `/stats` pages instead (below); the `services` widget reads it
+through `logs__aggregate` and shows `truncated` in its caption.
+
+## The two reads
+
+`GET /api/v1/events` (tool `logs__query`) answers rows; `GET /api/v1/stats` with `kind` (tool
+`logs__aggregate`) answers groups. Both take `kind` and the same filters: `since` and `until`
+(`15m`, `2h`, `7d` or an ISO time), `extension`, `part`, `host`, `level`, `route`, `status`, `agcid`,
+`sub`, `q` (text in msg, or an agcid); `/stats` also `user_type`.
+
+- `/events` adds `order` (`desc`, newest first, or `asc`), `limit` (at most 1000) and `cursor`.
+- `/stats` adds `by` (a comma list), `bucket` (`1m`, `5m`, `1h`), `sort` (a measure or a `by` name;
+  any other name is a 400 that lists the allowed ones), `order`, `limit` (100, at most 1000) and
+  `cursor`. A group without a value sorts last. `meta.nextCursor` pins the window of page 1, so
+  every page is cut from the same rows; a cursor sent with another kind, `by`, sort, order or filter
+  is a 400. Without `kind`, `/stats` answers the 0.2 form (`window`, `extension`).
+
+| kind                                  | `/stats` measures, per group                                |
+| ------------------------------------- | ----------------------------------------------------------- |
+| `http`, `mcp`                         | calls, failed, requests, availability, p50, p95, p99, users |
+| `job`                                 | runs, failed, p50, p95                                      |
+| `span`                                | count, p50, p95, p99                                        |
+| `error`                               | count, lastSeen, sample, agcid                              |
+| `log`, `event`                        | count                                                       |
+| `host` (event `host.stats`)           | cpu, cpu_avg, cpu_max, mem, disk, load1, containers, at     |
+| `container` (event `container.stats`) | cpu, cpu_avg, cpu_max, mem, limit, at                       |
+
+`by` takes `extension`, `part`, `route`, `method`, `status`, `host`, `level`, `client`, `user_type`,
+`sub`, `version`; `error` adds `type`, `container` adds `name`. availability is the admin
+console's formula (5xx, and 502 to 504 at the edge, against requests; a 429 is no request; null under
+50 requests); tests and services are left out of `http` and `mcp` unless `user_type` is given. A
+`host` or `container` sample is the newest without `bucket` and the step's average with it. The
+default window is 24 h (`host` 1 h, `container` 5 min); the default sort is the busiest first, with
+`bucket` time oldest first. Every identifier in the SQL comes from the kind's table
+([`src/lib/kinds.ts`](src/lib/kinds.ts)); every value is a query parameter.
+
+| Question                               | Call                                                              |
+| -------------------------------------- | ----------------------------------------------------------------- |
+| Errors that mention a timeout, 2 hours | `/events?level=error&q=timeout&since=2h`                          |
+| One request, every hop in time order   | `/events?agcid=0193a1f0...&order=asc&since=30d`                   |
+| Reliability per route, a day           | `/stats?kind=http&by=extension,part,route&since=24h`              |
+| Worst availability first               | `/stats?kind=http&by=extension,route&sort=availability&order=asc` |
+| Responses of one extension by status   | `/stats?kind=http&by=status&extension=market`                     |
+| Errors grouped by type, newest first   | `/stats?kind=error&by=type,extension&sort=lastSeen`               |
+| Containers of one machine              | `/stats?kind=container&host=next-1&by=name`                       |
+| Cpu of each machine in 5 minute steps  | `/stats?kind=host&by=host&bucket=5m&since=6h`                     |
+| Availability of one extension per hour | `/stats?kind=http&extension=probe&bucket=1h&since=24h`            |
 
 ## Scopes
 
@@ -103,7 +149,7 @@ The seed mints its ingest token from the dev issuer with subject `svc_seed`
 sets no subject, so its `usr_dev` token gets 403 on `POST /events`.
 `?widget=events|hosts|services` picks one widget, `?scope=logs:admin` makes the dev issuer mint
 the admin token the reads need, `?q=` prefills the events search, `?theme=light|dark` the theme.
-A row is red, its reason in the state cell, by: `events` level error; `hosts` the api's `red`
+A row is red, its reason in the state cell, by: `events` level error; `hosts` the widget's rule
 (a sample older than 3 min, cpu > 80, mem > 85 or disk > 80); `services` (edge rows left out)
 availability under 99.0 % (a dash under 50 requests) or the worst route's p95 over 1000 ms.
 The seed posts to `localhost` or `127.0.0.1` only.

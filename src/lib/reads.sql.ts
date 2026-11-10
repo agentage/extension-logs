@@ -1,6 +1,6 @@
-// The page's section 3 questions as SQL; JSON paths are cast, ClickHouse refuses Dynamic in avg and GROUP BY.
-const num = (path: string) => `CAST(fields.agentage.${path}, 'Nullable(Float64)')`;
-const str = (path: string) => `ifNull(CAST(fields.${path}, 'Nullable(String)'), '')`;
+import { num, str } from './kinds.js';
+
+// The page's section 3 questions as SQL.
 
 const COLUMNS = `id, ts, level, kind, msg, extension, part,
   version, host, agcid, sub, session, user_type, client, method, route, status, ms, ok, fields`;
@@ -10,16 +10,26 @@ export const FILTERS = {
   level: 'level = {level:String}',
   extension: 'extension = {extension:String}',
   part: 'part = {part:String}',
-  kind: 'kind = {kind:String}',
   agcid: 'agcid = {agcid:FixedString(32)}',
   host: 'host = {host:String}',
+  sub: 'sub = {sub:String}',
+  route: 'route = {route:String}',
+  status: 'status = {status:UInt16}',
+  user_type: 'user_type = {user_type:String}',
   since: "ts >= {since:DateTime64(3, 'UTC')}",
   until: "ts < {until:DateTime64(3, 'UTC')}",
-  cursorTs: "(ts, id) < ({cursorTs:DateTime64(3, 'UTC')}, {cursorId:UUID})",
 } as const;
 
-export const SEARCH = (where: string) => `SELECT ${COLUMNS} FROM events WHERE ${where}
-ORDER BY ts DESC, id DESC LIMIT {limit:UInt32}`;
+// Newest first, or oldest first; the cursor is the (ts, id) of the last row of the page before.
+export const ORDERS = {
+  desc: { by: 'ts DESC, id DESC', after: '<' },
+  asc: { by: 'ts ASC, id ASC', after: '>' },
+} as const;
+export const AFTER = (order: keyof typeof ORDERS) =>
+  `(ts, id) ${ORDERS[order].after} ({cursorTs:DateTime64(3, 'UTC')}, {cursorId:UUID})`;
+
+export const SEARCH = (where: string, order: keyof typeof ORDERS) => `SELECT ${COLUMNS} FROM events
+WHERE ${where} ORDER BY ${ORDERS[order].by} LIMIT {limit:UInt32}`;
 
 export const TRACE = `SELECT ${COLUMNS} FROM events WHERE agcid = {agcid:FixedString(32)}
 ORDER BY ts, id LIMIT 1000`;

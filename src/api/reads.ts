@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { reply, type ApiContext } from '@agentage/extension';
+import { groups } from '../lib/groups.js';
+import { type GroupsInput } from '../lib/groups.schema.js';
 import * as O from '../lib/outputs.schema.js';
 import * as R from '../lib/reads.js';
 import { type EventsStore } from '../lib/store.js';
@@ -16,13 +18,23 @@ const page = async (store: EventsStore, input: R.Search) => {
   });
 };
 
+// With kind the groups of the two-reads API; without it today's fixed answer.
+const stats = async (store: EventsStore, input: R.Stats & Partial<GroupsInput>) => {
+  if (input.kind === undefined) {
+    const { stats: rows, truncated } = await R.stats(store, input);
+    return reply(rows, { meta: { truncated } });
+  }
+  const { groups: rows, meta } = await groups(store, input as GroupsInput);
+  return reply(rows, { meta });
+};
+
 const agcid = z.object({ agcid: R.Agcid });
 const host = z.object({ host: R.Host });
 // Any account can mint logs:read for itself, so every read needs logs:admin.
 const READS = [
   {
     path: '/events',
-    summary: 'Search events',
+    summary: 'Events, newest first (order=asc for a trace): kind, filters, cursor',
     scope: 'admin',
     input: R.SearchQuery,
     output: z.array(O.EventOutSchema),
@@ -39,14 +51,11 @@ const READS = [
   {
     path: '/stats',
     summary:
-      'Calls, errors, availability, latency: 200 routes per part, 1000 in all, meta.truncated when cut',
+      'Groups of one kind with its measures (kind, by, bucket, sort, cursor); without kind, the window form',
     scope: 'admin',
-    input: R.StatsSchema,
-    output: z.array(O.StatOutSchema),
-    run: async (s: EventsStore, r: Req) => {
-      const { stats, truncated } = await R.stats(s, r.input);
-      return reply(stats, { meta: { truncated } });
-    },
+    input: R.StatsQuery,
+    output: z.union([z.array(O.StatOutSchema), z.array(O.GroupOutSchema)]),
+    run: (s: EventsStore, r: Req) => stats(s, r.input),
   },
   {
     path: '/hosts',

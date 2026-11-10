@@ -15,7 +15,7 @@
             "type": "string"
           },
           "kind": {
-            "enum": ["http", "mcp", "job", "span", "error", "event", "log"],
+            "enum": ["http", "mcp", "job", "span", "error", "event", "log", "host", "container"],
             "type": "string"
           },
           "level": {
@@ -603,6 +603,412 @@
             "type": "array"
           }
         },
+        "type": "object"
+      }
+    },
+    {
+      "description": "Log rows, newest first; order \"asc\" reads oldest first (one request in time order).\nFilters: kind (http, mcp, job, span, error, log, event, host, container), level, extension, part,\nhost, route, status, sub, agcid, q (text in msg, or an agcid), since and until (15m, 2h, 7d or ISO).\nlimit pages; nextCursor goes back as cursor. Examples:\n- errors that mention a timeout, last 2 hours: {\"level\":\"error\",\"q\":\"timeout\",\"since\":\"2h\"}\n- one request, every hop in time order: {\"agcid\":\"<32 hex>\",\"order\":\"asc\",\"since\":\"30d\"}\n- the 500 answers of one route: {\"kind\":\"http\",\"route\":\"/api/v1/machines\",\"status\":500}\n- the tool calls of one caller: {\"kind\":\"mcp\",\"sub\":\"usr_7f3a\"}\nFor counts, failure rates, latency or machines over time use logs__aggregate.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "agcid": {
+            "pattern": "^[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "cursor": {
+            "maxLength": 200,
+            "type": "string"
+          },
+          "extension": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "host": {
+            "pattern": "^(?!.*\\.\\.)[A-Za-z0-9][\\w.-]{0,252}$",
+            "type": "string"
+          },
+          "kind": {
+            "enum": ["http", "mcp", "job", "span", "error", "event", "log", "host", "container"],
+            "type": "string"
+          },
+          "level": {
+            "enum": ["info", "warn", "error"],
+            "type": "string"
+          },
+          "limit": {
+            "default": 20,
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "order": {
+            "default": "desc",
+            "enum": ["desc", "asc"],
+            "type": "string"
+          },
+          "part": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "q": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "route": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "pattern": "^\\d{1,4}[mhd]$",
+                "type": "string"
+              },
+              {
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+                "type": "string"
+              }
+            ],
+            "default": "24h"
+          },
+          "status": {
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "sub": {
+            "pattern": "^[A-Za-z0-9_-]{1,64}$",
+            "type": "string"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "pattern": "^\\d{1,4}[mhd]$",
+                "type": "string"
+              },
+              {
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "name": "logs__query",
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "events": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "agcid": {
+                  "anyOf": [
+                    {
+                      "pattern": "^[0-9a-f]{32}$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "client": {
+                  "type": "string"
+                },
+                "extension": {
+                  "maxLength": 64,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "fields": {
+                  "additionalProperties": {},
+                  "default": {},
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                },
+                "host": {
+                  "maxLength": 253,
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "enum": ["http", "mcp", "job", "span", "error", "event", "log"],
+                  "type": "string"
+                },
+                "level": {
+                  "enum": ["info", "warn", "error"],
+                  "type": "string"
+                },
+                "method": {
+                  "type": "string"
+                },
+                "ms": {
+                  "type": "number"
+                },
+                "msg": {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                "ok": {
+                  "type": "boolean"
+                },
+                "part": {
+                  "maxLength": 64,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "route": {
+                  "type": "string"
+                },
+                "session": {
+                  "anyOf": [
+                    {
+                      "maxLength": 128,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "status": {
+                  "type": "number"
+                },
+                "sub": {
+                  "anyOf": [
+                    {
+                      "maxLength": 128,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "ts": {
+                  "type": "string"
+                },
+                "userType": {
+                  "type": "string"
+                },
+                "version": {
+                  "default": "",
+                  "maxLength": 64,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "level",
+                "kind",
+                "msg",
+                "extension",
+                "part",
+                "version",
+                "agcid",
+                "sub",
+                "session",
+                "fields",
+                "id",
+                "ts",
+                "userType",
+                "client",
+                "method",
+                "route",
+                "status",
+                "ms",
+                "ok"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        },
+        "required": ["events"],
+        "type": "object"
+      }
+    },
+    {
+      "description": "Groups of one kind with its fixed measures, busiest first.\nkind: http, mcp (calls failed requests availability p50 p95 p99 users), job (runs failed p50 p95),\nspan (count p50 p95 p99), error (count lastSeen sample agcid), log, event (count),\nhost (cpu cpu_avg cpu_max mem disk load1 containers at), container (cpu cpu_avg cpu_max mem limit at).\nby: a comma list of extension, part, route, method, status, host, level, client, user_type, sub,\nversion (error adds type, container adds name). bucket 1m, 5m or 1h adds time as a group.\nsort: a measure or a by name; order desc or asc; nulls sort last. Same filters as logs__query.\nTests and services are left out of http and mcp unless user_type is given. Examples:\n- reliability per route, a day: {\"kind\":\"http\",\"by\":\"extension,part,route\",\"since\":\"24h\"}\n- worst availability first: {\"kind\":\"http\",\"by\":\"extension,route\",\"sort\":\"availability\",\"order\":\"asc\"}\n- tool calls per tool and client: {\"kind\":\"mcp\",\"by\":\"route,client\"}\n- errors by type, newest first: {\"kind\":\"error\",\"by\":\"type,extension\",\"sort\":\"lastSeen\"}\n- cpu of each machine in 5 minute steps: {\"kind\":\"host\",\"by\":\"host\",\"bucket\":\"5m\",\"since\":\"6h\"}\nmeta.nextCursor goes back as cursor for the next page. For the rows themselves use logs__query.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "agcid": {
+            "pattern": "^[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "bucket": {
+            "enum": ["1m", "5m", "1h"],
+            "type": "string"
+          },
+          "by": {
+            "description": "comma list of group columns, e.g. \"route,status\"",
+            "maxLength": 200,
+            "type": "string"
+          },
+          "cursor": {
+            "maxLength": 300,
+            "type": "string"
+          },
+          "extension": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "host": {
+            "pattern": "^(?!.*\\.\\.)[A-Za-z0-9][\\w.-]{0,252}$",
+            "type": "string"
+          },
+          "kind": {
+            "description": "what a row is; picks the measures",
+            "enum": ["http", "mcp", "job", "span", "error", "event", "log", "host", "container"],
+            "type": "string"
+          },
+          "level": {
+            "enum": ["info", "warn", "error"],
+            "type": "string"
+          },
+          "limit": {
+            "default": 100,
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "order": {
+            "enum": ["desc", "asc"],
+            "type": "string"
+          },
+          "part": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "q": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "route": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "pattern": "^\\d{1,4}[mhd]$",
+                "type": "string"
+              },
+              {
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+                "type": "string"
+              }
+            ]
+          },
+          "sort": {
+            "maxLength": 32,
+            "type": "string"
+          },
+          "status": {
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "sub": {
+            "pattern": "^[A-Za-z0-9_-]{1,64}$",
+            "type": "string"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "pattern": "^\\d{1,4}[mhd]$",
+                "type": "string"
+              },
+              {
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+                "type": "string"
+              }
+            ]
+          },
+          "user_type": {
+            "enum": ["user", "agent", "automation", "service", "test", "bot"],
+            "type": "string"
+          }
+        },
+        "required": ["kind"],
+        "type": "object"
+      },
+      "name": "logs__aggregate",
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "groups": {
+            "items": {
+              "additionalProperties": {
+                "type": ["string", "number", "null"]
+              },
+              "propertyNames": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "meta": {
+            "additionalProperties": false,
+            "properties": {
+              "by": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "nextCursor": {
+                "type": "string"
+              },
+              "order": {
+                "enum": ["desc", "asc"],
+                "type": "string"
+              },
+              "since": {
+                "type": "string"
+              },
+              "sort": {
+                "type": "string"
+              },
+              "truncated": {
+                "type": "boolean"
+              }
+            },
+            "required": ["kind", "by", "sort", "order", "since", "truncated"],
+            "type": "object"
+          }
+        },
+        "required": ["groups", "meta"],
         "type": "object"
       }
     }

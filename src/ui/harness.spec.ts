@@ -24,45 +24,32 @@ const event = (i: number, level: string) => ({
   },
 });
 const host = (name: string, cpu: number) => ({
-  ...{
-    host: name,
-    cpu,
-    cpu1h: cpu,
-    mem: 40,
-    disk: 30,
-    load1: 0.5,
-    containers: 2,
-    at,
-    red: cpu > 80,
-  },
+  ...{ host: name, cpu, cpu_avg: cpu, cpu_max: cpu, mem: 40, disk: 30, load1: 0.5 },
+  ...{ containers: 2, at },
 });
+// The trace rows: two request hops, 38 ms apart, 3 ms each: 41 ms first start to last end.
+const later = new Date(Date.parse(at) + 38).toISOString();
 const ROUTE = '/api/v1/machines/{machineId}/extensions/{extensionId}/settings';
 const stat = (part: string, failed: number, p95: number, extension = 'probe', route = '/a') => ({
-  ...{
-    extension,
-    part,
-    kind: 'http',
-    method: 'GET',
-    route,
-    calls: 100,
-    errors: failed,
-  },
-  ...{ failed, requests: 100, users: 1, availability: 1 - failed / 100, p50: 5, p95, p99: p95 },
+  ...{ extension, part, route, calls: 100, failed, requests: 100 },
+  ...{ availability: 1 - failed / 100, p50: 5, p95, p99: p95, users: 1 },
 });
 const DATA: Record<string, unknown> = {
   events: [event(1, 'info'), event(2, 'error')],
-  traces: { agcid: A, hops: 2, ms: 41, ok: true, events: [event(1, 'info'), event(3, 'info')] },
-  hosts: [host('next-logs', 20), host('next-2', 92)],
-  containers: [{ name: 'logs_api', cpu: 12.5, mem: 104_857_600, limit: 536_870_912 }],
-  stats: [stat('api', 0, 40), stat('mcp', 2, 30), stat('api', 0, 20, 'platform', ROUTE)],
+  trace: [event(1, 'info'), { ...event(3, 'info'), ts: later }],
+  host: [host('next-logs', 20), host('next-2', 92)],
+  container: [{ name: 'logs_api', cpu: 12.5, mem: 104_857_600, limit: 536_870_912 }],
+  http: [stat('api', 0, 40), stat('mcp', 2, 30), stat('api', 0, 20, 'platform', ROUTE)],
+  mcp: [],
 };
 const json = (body: unknown, status = 200) => ({
   status,
   contentType: 'application/json',
   body: JSON.stringify(body),
 });
-const answer = (path: string) =>
-  DATA[path.includes('/containers') ? 'containers' : (path.split('/')[3] ?? '')];
+// /stats answers by its kind, /events with an agcid is the trace.
+const answer = ({ pathname, searchParams: q }: URL) =>
+  DATA[pathname.endsWith('/stats') ? (q.get('kind') ?? '') : q.has('agcid') ? 'trace' : 'events'];
 
 // The first answer is held until the test releases it, after the newer one has landed: no timer.
 let release: () => void = () => undefined;
@@ -77,15 +64,18 @@ const settle = (page: Page) =>
   );
 
 type Mode = 'data' | 'empty' | 'error' | 'forbidden' | 'unauthorized' | 'offline' | 'hang';
-const NOTE = 'truncated: more than 200 routes in a part or 1000 in all; narrow by extension';
+const NOTE = 'truncated: more than 1000 groups; narrow by extension';
 
-// The services widget calls logs__stats over /mcp: the same data as a JSON-RPC result.
+// The services widget calls logs__aggregate over /mcp: the same groups as a JSON-RPC result.
 const rpc = (route: Route, mode: Mode | 'truncated') => {
-  const { id } = route.request().postDataJSON() as { id: number };
-  const stats = mode === 'empty' ? [] : DATA['stats'];
+  const { id, params } = route.request().postDataJSON() as {
+    id: number;
+    params: { arguments: { kind: string } };
+  };
+  const groups = mode === 'empty' ? [] : DATA[params.arguments.kind];
   const result = {
     content: [],
-    structuredContent: { stats, ...(mode === 'truncated' && { note: NOTE }) },
+    structuredContent: { groups, meta: { truncated: mode === 'truncated' } },
   };
   return route.fulfill(json({ jsonrpc: '2.0', id, result }));
 };
@@ -111,9 +101,7 @@ const open = async (page: Page, widget: string, mode: Mode | 'truncated' = 'data
         json({ success: false, error: { code: 'UNAVAILABLE', message: 'store down' } }, 503)
       );
     if (url.pathname.endsWith('/mcp')) return rpc(route, mode);
-    return route.fulfill(
-      json({ success: true, data: mode === 'empty' ? [] : answer(url.pathname) })
-    );
+    return route.fulfill(json({ success: true, data: mode === 'empty' ? [] : answer(url) }));
   });
   await page.goto(`/ui/${version}/harness.html?widget=${widget}&token=aga_test`);
   return { el: page.locator(`logs-${widget}`), seen };
@@ -169,7 +157,7 @@ test('events: filters narrow the query, an agcid opens its trace list', async ({
   await expect(el.getByRole('heading')).toBeFocused();
   await expect(el.getByRole('heading')).toHaveText(`agcid ${A} 2 hops · 41 ms · ok`);
   await expect(el.locator('tbody tr')).toHaveCount(2);
-  expect(seen.at(-1)).toBe(`/api/v1/traces/${A}`);
+  expect(seen.at(-1)).toBe(`/api/v1/events?agcid=${A}&order=asc&since=30d&limit=1000`);
   await axe(page);
 });
 
@@ -199,7 +187,7 @@ test('hosts: a host opens its containers, axe clean there', async ({ page }) => 
   await el.getByRole('button', { name: 'containers of next-2' }).click();
   await expect(el.getByRole('heading')).toBeFocused();
   await expect(el).toContainText('logs_api12.5%100 MB512 MB');
-  expect(seen.at(-1)).toBe('/api/v1/hosts/next-2/containers');
+  expect(seen.at(-1)).toBe('/api/v1/stats?kind=container&host=next-2&by=name&since=5m');
   await axe(page);
 });
 

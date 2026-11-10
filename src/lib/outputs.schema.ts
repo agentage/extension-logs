@@ -35,3 +35,9 @@ export const ContainerOutSchema = z.object({ name: text, cpu: maybe, mem: maybe,
 export const ErrorOutSchema = z.object({
   ...{ type: text, msg: text, count: num, lastSeen: text, agcid: text.nullable() },
 });
+// A /stats group: its by columns (and bucket), then the kind's measures.
+export const GroupOutSchema = z.record(z.string(), z.union([text, num, z.null()]));
+export const GroupsMetaSchema = z.object({
+  ...{ kind: text, by: z.array(text), sort: text, order: z.enum(['desc', 'asc']) },
+  ...{ since: text, truncated: z.boolean(), nextCursor: text.optional() },
+});

@@ -21,11 +21,49 @@ beforeAll(async () => {
 afterAll(() => server.close());
 
 describe('the logs tools', () => {
-  it('declares five tools, each logs:admin', () => {
+  it('declares the five tools of 0.2 and the two reads, each logs:admin', () => {
     const context = ctx();
     create(context);
     const tools = context.tools.map(({ name, spec }) => [name, spec.scope]);
-    expect(tools).toEqual(['search', 'trace', 'errors', 'stats', 'hosts'].map((n) => [n, 'admin']));
+    const names = ['search', 'trace', 'errors', 'stats', 'hosts', 'query', 'aggregate'];
+    expect(tools).toEqual(names.map((n) => [n, 'admin']));
+  });
+
+  it('query reads rows oldest first for a trace, with a next cursor', async () => {
+    expect(await server.call('query', { agcid: 'a'.repeat(32), order: 'asc' })).toEqual({
+      events: [],
+    });
+    expect(query).toHaveBeenLastCalledWith(
+      expect.stringContaining('ORDER BY ts ASC, id ASC'),
+      expect.objectContaining({ agcid: 'a'.repeat(32), limit: 21 })
+    );
+  });
+
+  it('aggregate answers groups and meta; a wrong sort is refused before the store', async () => {
+    query.mockResolvedValueOnce([{ route: 'probe__echo', calls: 2 }]);
+    expect(await server.call('aggregate', { kind: 'mcp', by: 'route', status: 0 })).toEqual({
+      groups: [{ route: 'probe__echo', calls: 2 }],
+      meta: {
+        kind: 'mcp',
+        by: ['route'],
+        sort: 'calls',
+        order: 'desc',
+        since: '24h',
+        truncated: false,
+      },
+    });
+    query.mockClear();
+    await expect(server.call('aggregate', { kind: 'mcp', sort: 'cpu' })).rejects.toThrow();
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('each read tool carries examples for a client to pick its arguments', () => {
+    const context = ctx();
+    create(context);
+    for (const name of ['query', 'aggregate']) {
+      const spec = context.tools.find((t) => t.name === name)?.spec as { description: string };
+      expect(spec.description.match(/^- .*: \{/gm)?.length).toBeGreaterThanOrEqual(4);
+    }
   });
 
   it('search runs the api SQL with a default limit of 20', async () => {

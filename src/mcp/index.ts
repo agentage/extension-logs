@@ -4,6 +4,7 @@ import * as O from '../lib/outputs.schema.js';
 import { openStore } from '../lib/open-store.js';
 import * as R from '../lib/reads.js';
 import { type EventsStore } from '../lib/store.js';
+import { READ_TOOLS } from './reads.js';
 
 const pick = { q: true, level: true, extension: true, kind: true, since: true } as const;
 const search = R.SearchSchema.pick(pick).extend({ limit: z.int().min(1).max(200).default(20) });
@@ -56,9 +57,9 @@ const TOOLS = [
   },
 ] as const;
 
-// Five tools on the api's SQL; every one needs logs:admin.
+// The five tools of 0.2 and the two reads; every one needs logs:admin.
 export function create({ tool, log }: McpContext) {
   const { store } = openStore(log);
-  for (const { name, run, ...spec } of TOOLS)
+  for (const { name, run, ...spec } of [...TOOLS, ...READ_TOOLS])
     tool(name, { ...spec, scope: 'admin' } as never, ((args: never) => run(store, args)) as never);
 }

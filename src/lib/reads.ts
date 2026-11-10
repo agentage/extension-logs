@@ -1,22 +1,10 @@
 import { z } from 'zod';
-import { KINDS, LEVELS } from '@agentage/extension/logs';
+import { Agcid, FILTER_FIELDS, Host, Order, Since, STAMP, iso } from './filters.schema.js';
+import { GROUP_FIELDS, checkGroups } from './groups.schema.js';
+import { GROUP_KINDS, KIND_DEFS } from './kinds.js';
 import * as SQL from './reads.sql.js';
 import { type EventsStore, type Row } from './store.js';
 
-const UNIT = { m: 60_000, h: 3_600_000, d: 86_400_000 } as const;
-const STAMP = /^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{3}$/;
-const stamp = (date: Date) => date.toISOString().replace('T', ' ').replace('Z', '');
-const iso = (ts: unknown) => `${String(ts).replace(' ', 'T')}Z`;
-const back = (s: string) => Number(s.slice(0, -1)) * UNIT[s.at(-1) as keyof typeof UNIT];
-
-// 15m, 2h, 7d back from now, or an ISO time; ClickHouse reads it as DateTime64(3, 'UTC').
-const Since = z.union([
-  z
-    .string()
-    .regex(/^\d{1,4}[mhd]$/)
-    .transform((s) => stamp(new Date(Date.now() - back(s)))),
-  z.iso.datetime({ offset: true }).transform((s) => stamp(new Date(s))),
-]);
 const decode = (cursor: string): unknown => {
   try {
     return JSON.parse(Buffer.from(cursor, 'base64url').toString());
@@ -33,16 +21,12 @@ const Cursor = z
 const cursorOf = (row: Row) =>
   Buffer.from(JSON.stringify([row['ts'], row['id']])).toString('base64url');
 
-const name = z.string().min(1).max(64);
-export const Agcid = z.string().regex(/^[0-9a-f]{32}$/);
-// A hostname: no slash, no '..', so a path segment never reads as another route.
-export const Host = z.string().regex(/^(?!.*\.\.)[A-Za-z0-9][\w.-]{0,252}$/);
+export { Agcid, Host };
 export const SearchSchema = z.object({
-  ...{ q: z.string().min(1).max(200).optional(), level: z.enum(LEVELS).optional() },
-  ...{ extension: name.optional(), part: name.optional(), kind: z.enum(KINDS).optional() },
-  ...{ agcid: Agcid.optional(), host: Host.optional() },
+  ...FILTER_FIELDS,
+  ...{ kind: z.enum(GROUP_KINDS).optional(), order: Order.default('desc') },
   ...{ since: Since.prefault('24h'), until: Since.optional(), cursor: Cursor.optional() },
-  limit: z.coerce.number().int().min(1).max(200).default(50),
+  limit: z.coerce.number().int().min(1).max(1000).default(50),
 });
 export type Search = z.output<typeof SearchSchema>;
 export const TRUNCATED =
@@ -54,10 +38,17 @@ export const SearchQuery = SearchSchema.refine(
 );
 export const StatsSchema = z.object({
   window: z.enum(['15m', '1h', '24h']).default('1h'),
-  extension: name.optional(),
+  extension: FILTER_FIELDS.extension,
 });
-export const ErrorsSchema = z.object({ since: Since.prefault('24h'), extension: name.optional() });
-type Stats = z.output<typeof StatsSchema>;
+// GET /stats: with kind the groups read, without it today's answer (window, extension).
+export const StatsQuery = z
+  .object({ ...GROUP_FIELDS, ...StatsSchema.shape, kind: GROUP_FIELDS.kind.optional() })
+  .superRefine(checkGroups);
+export const ErrorsSchema = z.object({
+  since: Since.prefault('24h'),
+  extension: FILTER_FIELDS.extension,
+});
+export type Stats = z.output<typeof StatsSchema>;
 type Errors = z.output<typeof ErrorsSchema>;
 
 const toEvent = ({ user_type, ts, ...row }: Row): Row => ({
@@ -66,12 +57,21 @@ const toEvent = ({ user_type, ts, ...row }: Row): Row => ({
   userType: user_type,
 });
 
-// Newest first; one extra row says a next page exists.
-export const search = async (store: EventsStore, { cursor, limit, ...filters }: Search) => {
+const whereOf = ({ kind, cursor, order = 'desc' }: Search, params: Row) => [
+  ...Object.entries(SQL.FILTERS)
+    .filter(([key]) => params[key] !== undefined)
+    .map(([, sql]) => sql),
+  ...(kind ? [KIND_DEFS[kind].where] : []),
+  ...(cursor ? [SQL.AFTER(order)] : []),
+];
+
+// Newest first (or oldest first); one extra row says a next page exists.
+export const search = async (store: EventsStore, input: Search) => {
+  // logs__search has no order: newest first.
+  const { cursor, limit, order = 'desc', ...filters } = input;
   const at = cursor && { cursorTs: cursor[0], cursorId: cursor[1] };
   const params: Row = { ...filters, ...at, limit: limit + 1 };
-  const where = Object.entries(SQL.FILTERS).filter(([key]) => params[key] !== undefined);
-  const rows = await store.query(SQL.SEARCH(where.map(([, sql]) => sql).join(' AND ')), params);
+  const rows = await store.query(SQL.SEARCH(whereOf(input, params).join(' AND '), order), params);
   const last = rows.length > limit ? rows[limit - 1] : undefined;
   return { events: rows.slice(0, limit).map(toEvent), nextCursor: last && cursorOf(last) };
 };

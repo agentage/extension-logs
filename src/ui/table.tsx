@@ -27,9 +27,16 @@ export function useApi<T>(path: string): Load<T> {
   return useLoad<T>(path, () => api(path));
 }
 
-export function useTool<T>(name: string, args: Record<string, string>): Load<T> {
+// Several calls as one load: ready when every answer is, an error when one fails.
+export function useApis<T>(paths: string[]): Load<T[]> {
+  const { api } = useHost();
+  return useLoad<T[]>(paths.join(' '), () => Promise.all(paths.map((path) => api(path))));
+}
+
+export function useTools<T>(name: string, calls: Record<string, string>[]): Load<T[]> {
   const { tool } = useHost();
-  return useLoad<T>(`${name} ${JSON.stringify(args)}`, () => tool(name, args));
+  const run = () => Promise.all(calls.map((args) => tool(name, args)));
+  return useLoad<T[]>(`${name} ${JSON.stringify(calls)}`, run);
 }
 
 export const mapLoad = <T, U>(load: Load<T>, fn: (data: T) => U): Load<U> =>

@@ -160,7 +160,7 @@
         }
       },
       "get": {
-        "summary": "Search events",
+        "summary": "Events, newest first (order=asc for a trace): kind, filters, cursor",
         "security": [
           {
             "pat": ["logs:admin"]
@@ -207,12 +207,12 @@
             }
           },
           {
-            "name": "kind",
+            "name": "host",
             "in": "query",
             "required": false,
             "schema": {
               "type": "string",
-              "enum": ["http", "mcp", "job", "span", "error", "event", "log"]
+              "pattern": "^(?!.*\\.\\.)[A-Za-z0-9][\\w.-]{0,252}$"
             }
           },
           {
@@ -225,12 +225,51 @@
             }
           },
           {
-            "name": "host",
+            "name": "sub",
             "in": "query",
             "required": false,
             "schema": {
               "type": "string",
-              "pattern": "^(?!.*\\.\\.)[A-Za-z0-9][\\w.-]{0,252}$"
+              "pattern": "^[A-Za-z0-9_-]{1,64}$"
+            }
+          },
+          {
+            "name": "route",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 65535
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["http", "mcp", "job", "span", "error", "event", "log", "host", "container"]
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": ["desc", "asc"]
             }
           },
           {
@@ -287,7 +326,7 @@
               "default": 50,
               "type": "integer",
               "minimum": 1,
-              "maximum": 200
+              "maximum": 1000
             }
           }
         ],
@@ -707,7 +746,7 @@
     },
     "/api/v1/stats": {
       "get": {
-        "summary": "Calls, errors, availability, latency: 200 routes per part, 1000 in all, meta.truncated when cut",
+        "summary": "Groups of one kind with its measures (kind, by, bucket, sort, cursor); without kind, the window form",
         "security": [
           {
             "pat": ["logs:admin"]
@@ -715,13 +754,22 @@
         ],
         "parameters": [
           {
-            "name": "window",
+            "name": "q",
             "in": "query",
             "required": false,
             "schema": {
-              "default": "1h",
               "type": "string",
-              "enum": ["15m", "1h", "24h"]
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "level",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["info", "warn", "error"]
             }
           },
           {
@@ -732,6 +780,183 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 64
+            }
+          },
+          {
+            "name": "part",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          },
+          {
+            "name": "host",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(?!.*\\.\\.)[A-Za-z0-9][\\w.-]{0,252}$"
+            }
+          },
+          {
+            "name": "agcid",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{32}$"
+            }
+          },
+          {
+            "name": "sub",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$"
+            }
+          },
+          {
+            "name": "route",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 65535
+            }
+          },
+          {
+            "name": "user_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["user", "agent", "automation", "service", "test", "bot"]
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d{1,4}[mhd]$"
+                },
+                {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                }
+              ]
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d{1,4}[mhd]$"
+                },
+                {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                }
+              ]
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["http", "mcp", "job", "span", "error", "event", "log", "host", "container"]
+            }
+          },
+          {
+            "name": "by",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "bucket",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["1m", "5m", "1h"]
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 32
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["desc", "asc"]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 300
+            }
+          },
+          {
+            "name": "window",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": "1h",
+              "type": "string",
+              "enum": ["15m", "1h", "24h"]
             }
           }
         ],
@@ -748,71 +973,87 @@
                       "const": true
                     },
                     "data": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "extension": {
-                            "type": "string"
-                          },
-                          "part": {
-                            "type": "string"
-                          },
-                          "kind": {
-                            "type": "string"
-                          },
-                          "method": {
-                            "type": "string"
-                          },
-                          "route": {
-                            "type": "string"
-                          },
-                          "calls": {
-                            "type": "number"
-                          },
-                          "errors": {
-                            "type": "number"
-                          },
-                          "failed": {
-                            "type": "number"
-                          },
-                          "requests": {
-                            "type": "number"
-                          },
-                          "users": {
-                            "type": "number"
-                          },
-                          "availability": {
-                            "type": ["number", "null"]
-                          },
-                          "p50": {
-                            "type": "number"
-                          },
-                          "p95": {
-                            "type": "number"
-                          },
-                          "p99": {
-                            "type": "number"
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "extension": {
+                                "type": "string"
+                              },
+                              "part": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string"
+                              },
+                              "method": {
+                                "type": "string"
+                              },
+                              "route": {
+                                "type": "string"
+                              },
+                              "calls": {
+                                "type": "number"
+                              },
+                              "errors": {
+                                "type": "number"
+                              },
+                              "failed": {
+                                "type": "number"
+                              },
+                              "requests": {
+                                "type": "number"
+                              },
+                              "users": {
+                                "type": "number"
+                              },
+                              "availability": {
+                                "type": ["number", "null"]
+                              },
+                              "p50": {
+                                "type": "number"
+                              },
+                              "p95": {
+                                "type": "number"
+                              },
+                              "p99": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "extension",
+                              "part",
+                              "kind",
+                              "method",
+                              "route",
+                              "calls",
+                              "errors",
+                              "failed",
+                              "requests",
+                              "users",
+                              "availability",
+                              "p50",
+                              "p95",
+                              "p99"
+                            ],
+                            "additionalProperties": false
                           }
                         },
-                        "required": [
-                          "extension",
-                          "part",
-                          "kind",
-                          "method",
-                          "route",
-                          "calls",
-                          "errors",
-                          "failed",
-                          "requests",
-                          "users",
-                          "availability",
-                          "p50",
-                          "p95",
-                          "p99"
-                        ],
-                        "additionalProperties": false
-                      }
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {
+                              "type": ["string", "number", "null"]
+                            }
+                          }
+                        }
+                      ]
                     }
                   },
                   "required": ["success", "data"]

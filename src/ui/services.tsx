@@ -1,5 +1,5 @@
-import { pct, serviceReasons, services, type Service, type Stat } from './rules.js';
-import { mapLoad, Table, useTool, type Row } from './table.js';
+import { pct, serviceReasons, services, type Group, type Service } from './rules.js';
+import { mapLoad, Table, useTools, type Row } from './table.js';
 
 const COLS = {
   'extension/part': 0,
@@ -16,16 +16,32 @@ const serviceRow = (s: Service): Row => ({
   cells: [
     `${s.extension}/${s.part}`,
     String(s.calls),
-    pct(s.calls ? (100 * s.errors) / s.calls : 0),
+    pct(s.calls ? (100 * s.failed) / s.calls : 0),
     `${Math.round(s.p95)} ms`,
     avail(s),
   ],
 });
 
-// logs__stats, not GET /stats: the bridge drops meta, the tool's note says the rows were cut.
+interface Groups {
+  groups: Group[];
+  meta: { truncated: boolean };
+}
+const NOTE = 'truncated: more than 1000 groups; narrow by extension';
+// Per kind: the sums per part, then the routes worst p95 first, so a cut never loses a part's worst.
+const day = { since: '24h', limit: '1000' };
+const CALLS = ['http', 'mcp'].flatMap((kind) => [
+  { kind, by: 'extension,part', ...day },
+  { kind, by: 'extension,part,route', sort: 'p95', ...day },
+]);
+const rowsOf = (answers: Groups[]) => {
+  const [http, httpRoutes, mcp, mcpRoutes] = answers.map((a) => a.groups);
+  return services([...(http ?? []), ...(mcp ?? [])], [...(httpRoutes ?? []), ...(mcpRoutes ?? [])]);
+};
+
+// logs__aggregate, not GET /stats: the bridge drops meta, the tool's meta says the groups were cut.
 export function Services() {
-  const load = useTool<{ stats?: Stat[]; note?: string }>('logs__stats', { window: '24h' });
-  const rows = mapLoad(load, ({ stats = [] }) => services(stats).map(serviceRow));
-  const note = load.state === 'ready' && load.data.note ? `, ${load.data.note}` : '';
-  return <Table caption={`services, 24 h${note}`} cols={COLS} load={rows} />;
+  const load = useTools<Groups>('logs__aggregate', CALLS);
+  const rows = mapLoad(load, (answers) => rowsOf(answers).map(serviceRow));
+  const cut = load.state === 'ready' && load.data.some((a) => a.meta.truncated);
+  return <Table caption={`services, 24 h${cut ? `, ${NOTE}` : ''}`} cols={COLS} load={rows} />;
 }
