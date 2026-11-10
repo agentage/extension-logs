@@ -38,10 +38,12 @@ describe('the api part', () => {
     expect((await statuses('usr_admin', 'logs:admin'))[1]).toBe(503);
   });
 
-  it('adds checks.clickhouse to /health: unavailable while the store is down', async () => {
+  it('adds checks.clickhouse and checks.disk to /health: unavailable while the store is down', async () => {
     connection.read = () => down;
     const ctx = createTestContext();
     create(ctx);
+    expect(Object.keys(ctx.checks)).toEqual(['clickhouse', 'disk']);
     expect(await ctx.checks['clickhouse']?.()).toBe('unavailable');
+    await expect(ctx.checks['disk']?.()).rejects.toThrow('ECONNREFUSED');
   });
 });

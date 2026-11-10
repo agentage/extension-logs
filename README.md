@@ -18,13 +18,15 @@ The line is `EventSchema` of `@agentage/extension/logs`; the ingest adds two rul
 the 30-day TTL, a `usr_` or `svc_` subject). The api, mcp and worker read the store connection
 from the file the estate mounts, `/run/secrets/store-url` (`http://logs:{pw}@logs_store:8123/logs`:
 user, password, host, database), on first use; `/health` of the api carries `checks.clickhouse`
-(a `SELECT 1`, bounded under 1 s).
+(a `SELECT 1`) and `checks.disk` (the least free disk in `system.disks`: under 1.5 GiB `degraded`,
+under the 1 GiB reserve `unavailable`), each bounded at 900 ms.
 
 ## Ingest and the store's limits
 
 One `POST /events` batch (at most 1000 lines, 1 MB) is one ClickHouse insert. An answer is
 `accepted: N` only after the store has the rows; a failed insert answers 503 `UNAVAILABLE` (the
-store down, slow past 10 s, or at one of its limits) or 500 `INTERNAL`, never a count. A retry is
+store down, slow past 10 s, at one of its limits, or unable to write: no space, a read-only table)
+or 500 `INTERNAL`, never a count. A retry is
 safe: ClickHouse 26.8 inserts async by default and keeps no dedup window on a non-replicated
 MergeTree, so the api sets `non_replicated_deduplication_window = 1000` on the table and sends
 each batch with a token (the sha256 of its rows); the same batch again stores nothing, even when

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { testStore } from '../lib/clickhouse.fixture.js';
 import { DEDUP_SETTING, SHOW_EVENTS } from '../lib/ddl.js';
-import { clickhouseCheck } from '../lib/store.js';
+import { clickhouseCheck, diskCheck } from '../lib/store.js';
 import { OLDEST } from '../worker/retention.js';
 import { LINES } from './lines.fixture.js';
 import { toRow } from './rows.js';
@@ -25,8 +25,9 @@ describe.runIf(store)('the events table on ClickHouse', () => {
     expect(table?.statement).toContain(DEDUP_SETTING);
   });
 
-  it('answers checks.clickhouse ok', async () => {
+  it('answers checks.clickhouse ok and checks.disk from system.disks', async () => {
     expect(await clickhouseCheck(db!.ch)()).toBe('ok');
+    expect(await diskCheck(db!.ch)()).toBe('ok');
   });
 
   it('stores one row per line, with the time and the agcid as sent', async () => {

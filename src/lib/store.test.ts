@@ -7,6 +7,7 @@ import {
   clickhouse,
   clickhouseCheck,
   createEventsStore,
+  diskCheck,
   isOutage,
   lazy,
   type Clickhouse,
@@ -67,6 +68,18 @@ describe('the events store', () => {
     }
   );
 
+  it.each(['243', '242', '204', '294', '75', '173'])(
+    'answers a store that cannot write (code %s) as UNAVAILABLE, never a 500',
+    async (code) => {
+      const { ch, store } = fake();
+      vi.mocked(ch.insert).mockRejectedValueOnce(Object.assign(new Error('Code: 243'), { code }));
+      await expect(store.insert([{ a: 1 }])).rejects.toMatchObject({
+        code: 'UNAVAILABLE',
+        message: 'The store cannot write now: retry later',
+      });
+    }
+  );
+
   it('answers UNAVAILABLE while the store is down, and runs the DDL again when it is back', async () => {
     const command = vi.fn().mockRejectedValueOnce(refused).mockResolvedValue(undefined);
     const { ch, store } = fake(command);
@@ -88,6 +101,27 @@ describe('the events store', () => {
     [null, false],
   ])('tells an outage from a fault (%#)', (err, outage) => {
     expect(isOutage(err)).toBe(outage);
+  });
+});
+
+describe('checks.disk', () => {
+  const GIB = 1024 ** 3;
+  it.each([
+    [[{ free: 2 * GIB }], 'ok'],
+    [[{ free: 1.5 * GIB }], 'ok'],
+    [[{ free: 1.5 * GIB - 1 }], 'degraded'],
+    [[{ free: GIB }], 'degraded'],
+    [[{ free: GIB - 1 }], 'unavailable'],
+    [[], 'unavailable'],
+  ])('reads the least free disk %j as %s', async (rows, status) => {
+    const { ch } = fake();
+    vi.mocked(ch.query).mockResolvedValueOnce(rows);
+    expect(await diskCheck(ch)()).toBe(status);
+    expect(ch.query).toHaveBeenCalledWith(
+      expect.stringContaining('system.disks'),
+      {},
+      expect.any(AbortSignal)
+    );
   });
 });
 
@@ -143,6 +177,15 @@ describe('the client against a store that never answers or is not there', () => 
     await expect(store.insert([{ a: 1 }])).rejects.toMatchObject({ code: 'UNAVAILABLE' });
     expect(Date.now() - started).toBeLessThan(2_000);
     await expect(clickhouseCheck(clickhouse(at(port()), 300))()).resolves.toBe('unavailable');
+  });
+
+  it('bounds both /health checks under the kit 1 s bound, whatever the client timeout', async () => {
+    const ch = clickhouse(at(port()));
+    const started = Date.now();
+    const [ping, disk] = await Promise.allSettled([clickhouseCheck(ch)(), diskCheck(ch)()]);
+    expect(Date.now() - started).toBeLessThan(1_500);
+    expect(ping).toEqual({ status: 'fulfilled', value: 'unavailable' });
+    expect(disk.status).toBe('rejected');
   });
 
   it('answers UNAVAILABLE at once on a closed port', async () => {
