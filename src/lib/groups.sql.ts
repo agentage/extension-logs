@@ -50,8 +50,7 @@ const orderOf = ({ sort, order, by, bucket }: GroupPlan) => {
   return [`${quote(sort)} ${DIR[order]} NULLS LAST`, ...keys.map(quote)].join(', ');
 };
 
-// One statement; identifiers come from the kind's table only, every value is a query parameter.
-// The inner select keeps a measure's alias (agcid) from reaching the filters.
+// Identifiers from the kind's table, values as parameters; the inner select hides measure aliases.
 export const groupsSql = (plan: GroupPlan) => {
   const keys = [...(plan.bucket ? ['bucket'] : []), ...plan.by];
   const group = keys.length > 0 ? `GROUP BY ${keys.map(quote).join(', ')} ` : '';
