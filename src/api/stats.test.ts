@@ -1,5 +1,7 @@
 import { createTestContext, startTestServer, type Caller } from '@agentage/extension';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cursorOf } from '../lib/events-cursor.js';
+import { SearchSchema } from '../lib/reads.js';
 import { type EventsStore } from '../lib/store.js';
 import { reads } from './reads.js';
 
@@ -72,10 +74,13 @@ describe('GET /stats with kind', () => {
     expect(query).not.toHaveBeenCalled();
   });
 
-  it('a list of kinds that measure differently answers 400 naming why', async () => {
+  it('a list of kinds that measure differently answers 400 naming the lists it takes', async () => {
     const { error } = await body('/stats?kind=http,job');
     expect(error.details).toEqual([
-      { field: 'kind', message: expect.stringMatching(/^http and job have different measures/) },
+      {
+        field: 'kind',
+        message: expect.stringMatching(/http,mcp, mcp,http, log,event.*share measures$/),
+      },
     ]);
     expect(query).not.toHaveBeenCalled();
   });
@@ -116,7 +121,8 @@ describe('GET /stats with kind', () => {
 
 describe('GET /events, the new parameters', () => {
   const row = { id: '01a1c251-6d38-7407-ad7b-4bedc9fc47b3', ts: '2026-11-10 09:12:03.412' };
-  const cursor = Buffer.from(JSON.stringify([row.ts, row.id])).toString('base64url');
+  const asc = SearchSchema.parse({ agcid: 'a'.repeat(32), order: 'asc' });
+  const cursor = cursorOf(row, asc);
 
   it('order=asc reads oldest first and pages after the cursor', async () => {
     await get(`/events?agcid=${'a'.repeat(32)}&order=asc&cursor=${cursor}`);

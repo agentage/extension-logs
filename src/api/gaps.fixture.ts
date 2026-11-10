@@ -64,3 +64,12 @@ export const GAPS = [
 export const TIES = Array.from({ length: 5 }, (_, n) =>
   http(30, '/tie', 7, 200, { extension: 'ties', msg: `tie ${n}` })
 );
+// The union rule: an api 429 is no request, an edge 404 neither, an edge 502 fails, as an mcp error.
+export const UNION = [
+  ...[200, 429, 500].map((status, n) => http(40 + n, '/u', 10, status, { extension: 'union' })),
+  ...[502, 404].map((status) => http(43, '/u', 0, status, { extension: 'union', part: 'edge' })),
+  ...[mcp(44, 10, 'usr_a'), mcp(45, 10, 'usr_a', 'Error')].map((row) => ({
+    ...row,
+    extension: 'union',
+  })),
+];

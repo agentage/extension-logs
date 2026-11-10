@@ -351,7 +351,7 @@
             "required": false,
             "schema": {
               "type": "string",
-              "maxLength": 200
+              "maxLength": 300
             }
           },
           {
@@ -952,8 +952,22 @@
             "required": false,
             "schema": {
               "type": "string",
-              "maxLength": 100,
-              "description": "http, mcp, job, span, error, event, log, host, container, any, or a list with one set of measures: http,mcp"
+              "enum": [
+                "http",
+                "mcp",
+                "job",
+                "span",
+                "error",
+                "event",
+                "log",
+                "host",
+                "container",
+                "any",
+                "http,mcp",
+                "mcp,http",
+                "log,event",
+                "event,log"
+              ]
             }
           },
           {

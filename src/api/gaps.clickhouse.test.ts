@@ -3,7 +3,7 @@ import { testStore } from '../lib/clickhouse.fixture.js';
 import { groups } from '../lib/groups.js';
 import { GroupsQuery } from '../lib/groups.schema.js';
 import * as R from '../lib/reads.js';
-import { G, GAPS, TIES, at } from './gaps.fixture.js';
+import { G, GAPS, TIES, UNION, at } from './gaps.fixture.js';
 import { toRow } from './rows.js';
 
 // The 0.4 additions against a real ClickHouse 26.8; skipped without CLICKHOUSE_URL.
@@ -18,7 +18,7 @@ const pick = (list: Record<string, unknown>[], ...keys: string[]) =>
 describe.runIf(db)('the 0.4 additions on ClickHouse', () => {
   beforeAll(async () => {
     await db?.reset();
-    await db!.store.insert([...GAPS, ...TIES].map(toRow) as object[]);
+    await db!.store.insert([...GAPS, ...TIES, ...UNION].map(toRow) as object[]);
   });
   afterAll(() => db?.drop());
 
@@ -30,6 +30,14 @@ describe.runIf(db)('the 0.4 additions on ClickHouse', () => {
     expect(pick(split, 'kind', 'calls', 'failed', 'users')).toEqual([
       ['http', 5, 1, 2],
       ['mcp', 2, 1, 2],
+    ]);
+    const union = await ask({ kind: 'mcp,http', extension: 'union', by: 'kind', sort: 'kind' });
+    expect(pick(union, 'kind', 'calls', 'failed', 'requests')).toEqual([
+      ['mcp', 2, 1, 2],
+      ['http', 5, 2, 3],
+    ]);
+    expect(await ask({ kind: 'http,mcp', extension: 'union' })).toEqual([
+      expect.objectContaining({ calls: 7, failed: 3, requests: 5 }),
     ]);
   });
 
@@ -111,6 +119,17 @@ describe.runIf(db)('the 0.4 additions on ClickHouse', () => {
     ]);
     expect(await ask({ kind: 'event', name: 'backup.run' })).toEqual([{ count: 2 }]);
     expect(await rows({ extension: 'gaps', name: 'backup.run' })).toHaveLength(2);
+    expect(await ask({ kind: 'any', name: 'backup.run' })).toEqual([
+      expect.objectContaining({ count: 2 }),
+    ]);
+  });
+
+  it('7. on container, name filters the container name, as by=name groups it', async () => {
+    const [box] = await ask({ kind: 'container', name: 'gaps_api.1', since: '1h' });
+    expect(box).toMatchObject({ mem: 500, mem_max: 900 });
+    expect(await ask({ kind: 'container', name: 'container.stats', since: '1h' })).toEqual([]);
+    const listed = await rows({ extension: 'gaps', kind: 'container', name: 'gaps_api.1' });
+    expect(listed).toHaveLength(3);
   });
 
   it('8. by user_type keeps test and service rows; without it they stay out', async () => {

@@ -23,6 +23,15 @@ export type GroupKind = (typeof GROUP_KINDS)[number];
 // any: every row of every kind, counted; only /stats takes it.
 export const STATS_KINDS = [...GROUP_KINDS, 'any'] as const;
 export type StatsKind = (typeof STATS_KINDS)[number];
+// The lists whose kinds share measures, each to one order, so both orders share a cursor key.
+export const KIND_LISTS = {
+  ...{ 'http,mcp': 'http,mcp', 'mcp,http': 'http,mcp' },
+  ...{ 'log,event': 'log,event', 'event,log': 'log,event' },
+} as const;
+export const KIND_NAMES = [
+  ...STATS_KINDS,
+  ...(Object.keys(KIND_LISTS) as (keyof typeof KIND_LISTS)[]),
+];
 export const BUCKETS = {
   '1m': 'INTERVAL 1 MINUTE',
   '5m': 'INTERVAL 5 MINUTE',
@@ -42,8 +51,7 @@ export const COLUMNS = [
 
 const latency = { p50: 'quantile(0.5)(ms)', p95: 'quantile(0.95)(ms)', p99: 'quantile(0.99)(ms)' };
 const seen = { firstSeen: 'min(ts)', lastSeen: 'max(ts)' };
-// The admin console's formula: at the edge only 502, 503, 504 count; a 429 is no request.
-// One object for http and mcp, so a list of both measures each row by its own kind's rule.
+// Admin's formula by each row's kind (http,mcp a union): the edge fails on 502-504; 429 no request.
 const EDGE = "part = 'edge'";
 const GATEWAY = 'status IN (502, 503, 504)';
 const reliability = {
@@ -113,7 +121,11 @@ export const KIND_DEFS: Record<StatsKind, KindDef> = {
     ...{ sort: 'cpu', since: '5m' },
   },
   any: {
-    ...{ where: '1', measures: { count: 'count()', ...seen }, by: { kind: 'kind' } },
+    ...{
+      where: '1',
+      measures: { count: 'count()', ...seen },
+      by: { kind: 'kind', name: str('event.name') },
+    },
     ...{ sort: 'count', since: '24h' },
   },
 };

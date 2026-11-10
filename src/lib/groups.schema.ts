@@ -1,8 +1,16 @@
 import { z } from 'zod';
 import { PageCursor, queryKey } from './cursor.js';
 import { FILTER_FIELDS, Order, Since, USER_TYPE, iso, pinnedEnd } from './filters.schema.js';
-import { byNames, defOf, kindIssue, sortNames } from './kind-def.js';
-import { BUCKETS, BUCKET_MS, MAX_STEPS, STATS_KINDS, type Bucket, type KindDef } from './kinds.js';
+import { NAME_RULE, byNames, defOf, nameSql, sortNames } from './kind-def.js';
+import {
+  BUCKETS,
+  BUCKET_MS,
+  KIND_LISTS,
+  KIND_NAMES,
+  MAX_STEPS,
+  type Bucket,
+  type KindDef,
+} from './kinds.js';
 
 // Kept as given, so meta.since echoes it; the read turns it into a time.
 const When = z.union([z.string().regex(/^\d{1,4}[mhd]$/), z.iso.datetime({ offset: true })]);
@@ -19,11 +27,12 @@ export const GROUP_FIELDS = {
   ...FILTER_FIELDS,
   ...{ user_type: USER_TYPE.optional(), since: When.optional(), until: When.optional() },
   kind: z
-    .string()
-    .max(100)
-    .meta({
-      description: `${STATS_KINDS.join(', ')}, or a list with one set of measures: http,mcp`,
-    }),
+    .enum(KIND_NAMES, {
+      error: `kind takes ${KIND_NAMES.join(', ')}: a list only of kinds that share measures`,
+    })
+    .transform((kind): string =>
+      Object.hasOwn(KIND_LISTS, kind) ? KIND_LISTS[kind as keyof typeof KIND_LISTS] : kind
+    ),
   by: List.optional(),
   bucket: z.enum(Object.keys(BUCKETS) as [Bucket, ...Bucket[]]).optional(),
   under: z.coerce.number().int().min(1).max(600_000).optional(),
@@ -69,24 +78,27 @@ const windowIssues = (input: Fields) => {
     },
   ];
 };
+const paramIssues = (def: KindDef, { under, name }: Fields) => [
+  under !== undefined &&
+    !def.under && { path: ['under'], message: 'under takes the kinds http and mcp' },
+  name !== undefined && !nameSql(def) && { path: ['name'], message: NAME_RULE },
+];
 const issuesOf = (input: Fields): Issue[] => {
-  const kind = kindIssue(input.kind);
-  if (kind) return [{ path: ['kind'], message: kind }];
   const def = defIn(input);
   const by = byNames(def);
   const sorts = sortNames(def, input.by ?? [], input.bucket !== undefined, input.under);
   return [
     outside(input.by ?? [], by) && { path: ['by'], message: `by takes ${by.join(', ')}` },
-    input.under !== undefined &&
-      !def.under && { path: ['under'], message: 'under takes the kinds http and mcp' },
     outside([sortOf(input).sort], sorts) && {
       path: ['sort'],
       message: `sort takes ${sorts.join(', ')}`,
     },
+    ...paramIssues(def, input),
     ...windowIssues(input),
-    input.cursor &&
+    input.cursor?.k !== undefined &&
       input.cursor.k !== keyOf(input) && {
-        ...{ path: ['cursor'], message: 'the cursor belongs to another query' },
+        path: ['cursor'],
+        message: 'the cursor belongs to another query',
       },
   ].filter((issue): issue is Issue => Boolean(issue));
 };

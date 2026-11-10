@@ -17,7 +17,6 @@ export const FILTERS = {
   status: 'status = {status:UInt16}',
   user_type: 'user_type = {user_type:String}',
   ok: 'ok = {ok:Bool}',
-  name: `${str('event.name')} = {name:String}`,
   since: "ts >= {since:DateTime64(3, 'UTC')}",
   until: "ts < {until:DateTime64(3, 'UTC')}",
 } as const;

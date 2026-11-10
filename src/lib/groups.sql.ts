@@ -1,4 +1,4 @@
-import { byNames, defOf, measuresOf, sortNames } from './kind-def.js';
+import { byNames, defOf, measuresOf, nameSql, sortNames } from './kind-def.js';
 import { BUCKETS, type Bucket, type KindDef, type Measure } from './kinds.js';
 import { FILTERS } from './reads.sql.js';
 
@@ -42,6 +42,7 @@ const whereOf = (def: KindDef, { filters, by }: GroupPlan) => {
     FILTERS.since,
     FILTERS.until,
     ...given.map(([, sql]) => sql),
+    ...(filters['name'] !== undefined ? [nameSql(def)] : []),
     ...(def.synthetic && !asked ? ["user_type NOT IN ('test', 'service')"] : []),
   ].join(' AND ');
 };
@@ -53,16 +54,16 @@ const orderOf = ({ sort, order, by, bucket }: GroupPlan) => {
 };
 
 // The builder trusts no caller: a name outside the kind's lists never becomes SQL.
-const guard = ({ kind, by, bucket, sort, under }: GroupPlan) => {
-  const def = defOf(kind);
-  if (
-    !def ||
-    (bucket && !Object.hasOwn(BUCKETS, bucket)) ||
-    by.some((n) => !byNames(def).includes(n))
-  )
+const guard = (plan: GroupPlan) => {
+  const { by, bucket, sort, order, under, filters } = plan;
+  const def = defOf(plan.kind);
+  const known = def && (!bucket || Object.hasOwn(BUCKETS, bucket));
+  if (!known || by.some((name) => !byNames(def).includes(name)))
     throw new Error('groupsSql: a kind, bucket or by outside the closed lists');
-  if (!sortNames(def, by, bucket !== undefined, under).includes(sort))
-    throw new Error('groupsSql: a sort outside the closed lists');
+  if (!sortNames(def, by, bucket !== undefined, under).includes(sort) || !Object.hasOwn(DIR, order))
+    throw new Error('groupsSql: a sort or order outside the closed lists');
+  if (filters['name'] !== undefined && !nameSql(def))
+    throw new Error('groupsSql: a name filter on a kind without names');
   return def;
 };
 
