@@ -29,3 +29,7 @@ PARTITION BY toDate(ts)
 ORDER BY (extension, part, ts)
 TTL ts + INTERVAL 30 DAY;              -- Q5
 `;
+
+// Off by default on a non-replicated MergeTree; keeps the last 1000 batch tokens, so a retry stores nothing twice.
+export const EVENTS_DEDUP =
+  'ALTER TABLE events MODIFY SETTING non_replicated_deduplication_window = 1000';

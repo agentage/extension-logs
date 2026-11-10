@@ -52,6 +52,25 @@ describe.runIf(store)('the events table on ClickHouse', () => {
     expect(row).toEqual({ route: '/api/v1/machines', status: 401, ms: 1, ok: true });
   });
 
+  it('stores 1000 lines of about 1 MB in one insert, and a retried batch adds no row', async () => {
+    const fields = Object.fromEntries([0, 1, 2, 3].map((k) => [`load.k${k}`, 'v'.repeat(190)]));
+    const one = (i: number) => ({ ...LINES.log, msg: `load ${i} `.padEnd(190, 'y'), fields });
+    const batch = Array.from({ length: 1000 }, (_, i) => toRow(one(i))) as object[];
+    expect(JSON.stringify(batch).length).toBeGreaterThan(1_000_000);
+    await store!.insert(batch);
+    await store!.insert(batch);
+    const [row] = await store!.query<{ n: number }>(
+      "SELECT count() AS n FROM events WHERE startsWith(msg, 'load ')"
+    );
+    expect(row?.n).toBe(1000);
+  });
+
+  it('answers a read over its limits as UNAVAILABLE busy, never a 500', async () => {
+    const sql =
+      "SELECT number FROM numbers(10) SETTINGS max_result_rows = 1, result_overflow_mode = 'throw'";
+    await expect(store!.query(sql)).rejects.toMatchObject({ code: 'UNAVAILABLE' });
+  });
+
   it('answers the retention check with the oldest partition', async () => {
     const [row] = await store!.query<{ oldest: string }>(OLDEST);
     expect(row?.oldest).toBe(LINES.log.ts.slice(0, 10));

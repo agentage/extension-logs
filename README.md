@@ -20,6 +20,21 @@ from the file the estate mounts, `/run/secrets/store-url` (`http://logs:{pw}@log
 user, password, host, database), on first use; `/health` of the api carries `checks.clickhouse`
 (a `SELECT 1`, bounded under 1 s).
 
+## Ingest and the store's limits
+
+One `POST /events` batch (at most 1000 lines, 1 MB) is one ClickHouse insert. An answer is
+`accepted: N` only after the store has the rows; a failed insert answers 503 `UNAVAILABLE` (the
+store down, slow past 10 s, or at one of its limits) or 500 `INTERNAL`, never a count. A retry is
+safe: ClickHouse 26.8 inserts async by default and keeps no dedup window on a non-replicated
+MergeTree, so the api sets `non_replicated_deduplication_window = 1000` on the table and sends
+each batch with a token (the sha256 of its rows); the same batch again stores nothing, even when
+the first attempt landed after its 503. Two identical batches sent on purpose count once.
+
+Every read runs with `max_execution_time` 9 s, `max_memory_usage` 256 MB and `max_result_rows`
+10000 (throw, never a silent cut), so one wide query cannot take the 2 GB store; past a limit the
+read answers 503 `UNAVAILABLE` "The store is busy: narrow the query or retry". `/stats` returns
+the top 1000 groups by calls.
+
 ## Scopes
 
 Any account can mint `logs:read` and `logs:write` for itself, so neither opens a read; only an
