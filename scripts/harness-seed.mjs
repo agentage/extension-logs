@@ -27,7 +27,7 @@ const id = () => randomBytes(16).toString('hex');
 const many = (n, make) => Array.from({ length: n }, (_, i) => make(i));
 const trace = id();
 const first = (i) => (i === 0 ? trace : id());
-const user = { user_type: 'user', sub: 'usr_seed', host: 'next-1', version: '0.3.0' };
+const user = { user_type: 'user', sub: 'usr_seed', host: 'next-1', version: '0.4.0' };
 const line = (at, [extension, part], kind, level, msg, agcid, fields = {}) => ({
   ...{ ...user, ts: ago(at), kind, level, msg, extension, part, agcid, fields },
 });

@@ -1,7 +1,7 @@
 {
   "serverInfo": {
     "name": "agentage-logs",
-    "version": "0.3.0"
+    "version": "0.4.0"
   },
   "tools": [
     {
@@ -607,7 +607,7 @@
       }
     },
     {
-      "description": "Log rows, newest first; order \"asc\" reads oldest first (one request in time order).\nFilters: kind (http, mcp, job, span, error, log, event, host, container), level, extension, part,\nhost, route, status, sub, agcid, q (text in msg, or an agcid), since and until (15m, 2h, 7d or ISO).\nlimit pages; nextCursor goes back as cursor. Examples:\n- errors that mention a timeout, last 2 hours: {\"level\":\"error\",\"q\":\"timeout\",\"since\":\"2h\"}\n- one request, every hop in time order: {\"agcid\":\"<32 hex>\",\"order\":\"asc\",\"since\":\"30d\"}\n- the 500 answers of one route: {\"kind\":\"http\",\"route\":\"/api/v1/machines\",\"status\":500}\n- the tool calls of one caller: {\"kind\":\"mcp\",\"sub\":\"usr_7f3a\"}\nFor counts, failure rates, latency or machines over time use logs__aggregate.",
+      "description": "Log rows, newest first; order \"asc\" reads oldest first (one request in time order).\nFilters: kind (http, mcp, job, span, error, log, event, host, container), level, extension, part,\nhost, route, status, sub, agcid, ok, name (event or container name), q (text in msg, or an agcid), since and\nuntil (15m, 2h, 7d or ISO). sort \"ms\" reads the slowest first. limit pages; nextCursor goes back\nas cursor. Examples:\n- errors that mention a timeout, last 2 hours: {\"level\":\"error\",\"q\":\"timeout\",\"since\":\"2h\"}\n- one request, every hop in time order: {\"agcid\":\"<32 hex>\",\"order\":\"asc\",\"since\":\"30d\"}\n- the 500 answers of one route: {\"kind\":\"http\",\"route\":\"/api/v1/machines\",\"status\":500}\n- the tool calls of one caller: {\"kind\":\"mcp\",\"sub\":\"usr_7f3a\"}\n- the slowest failed requests of a day: {\"kind\":\"http\",\"ok\":false,\"sort\":\"ms\",\"since\":\"24h\"}\nFor counts, failure rates, latency or machines over time use logs__aggregate.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
@@ -616,7 +616,7 @@
             "type": "string"
           },
           "cursor": {
-            "maxLength": 200,
+            "maxLength": 300,
             "type": "string"
           },
           "extension": {
@@ -641,6 +641,22 @@
             "maximum": 1000,
             "minimum": 1,
             "type": "integer"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "ok": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "enum": ["true", "false"],
+                "type": "string"
+              }
+            ]
           },
           "order": {
             "default": "desc",
@@ -675,6 +691,11 @@
               }
             ],
             "default": "24h"
+          },
+          "sort": {
+            "default": "ts",
+            "enum": ["ts", "ms"],
+            "type": "string"
           },
           "status": {
             "maximum": 65535,
@@ -847,7 +868,7 @@
       }
     },
     {
-      "description": "Groups of one kind with its fixed measures, busiest first.\nkind: http, mcp (calls failed requests availability p50 p95 p99 users), job (runs failed p50 p95),\nspan (count p50 p95 p99), error (count lastSeen sample agcid), log, event (count),\nhost (cpu cpu_avg cpu_max mem disk load1 containers at), container (cpu cpu_avg cpu_max mem limit at).\nby: a comma list of extension, part, route, method, status, host, level, client, user_type, sub,\nversion (error adds type, container adds name). bucket 1m, 5m or 1h adds time as a group.\nsort: a measure or a by name; order desc or asc; nulls sort last. Same filters as logs__query.\nTests and services are left out of http and mcp unless user_type is given. Examples:\n- reliability per route, a day: {\"kind\":\"http\",\"by\":\"extension,part,route\",\"since\":\"24h\"}\n- worst availability first: {\"kind\":\"http\",\"by\":\"extension,route\",\"sort\":\"availability\",\"order\":\"asc\"}\n- tool calls per tool and client: {\"kind\":\"mcp\",\"by\":\"route,client\"}\n- errors by type, newest first: {\"kind\":\"error\",\"by\":\"type,extension\",\"sort\":\"lastSeen\"}\n- cpu of each machine in 5 minute steps: {\"kind\":\"host\",\"by\":\"host\",\"bucket\":\"5m\",\"since\":\"6h\"}\nmeta.nextCursor goes back as cursor for the next page. For the rows themselves use logs__query.",
+      "description": "Groups of one kind with its fixed measures, busiest first.\nkind: http, mcp (calls failed requests availability p50 p95 p99 users firstSeen lastSeen agcid;\nunder=<ms> adds the share at or under it), job (runs failed p50 p95), span (count p50 p95 p99),\nerror (count lastSeen sample agcid), log, event (count), host (cpu cpu_avg cpu_max mem mem_max\ndisk disk_max load1 containers at), container (cpu cpu_avg cpu_max mem mem_max limit at),\nany (count firstSeen lastSeen, every kind). \"http,mcp\" is one number over both.\nby: a comma list of extension, part, route, method, status, host, level, client, user_type, sub,\nversion (error adds type, fingerprint; event, any, container add name; a list and any add kind).\nbucket 1m, 5m, 1h or 1d adds time as a group. sort: a measure or a by name; order desc or asc;\nnulls sort last. Same filters as logs__query. Tests and services are left out of http and mcp\nunless user_type is given or grouped on. Examples:\n- reliability per route, a day: {\"kind\":\"http\",\"by\":\"extension,part,route\",\"since\":\"24h\"}\n- worst availability first: {\"kind\":\"http\",\"by\":\"extension,route\",\"sort\":\"availability\",\"order\":\"asc\"}\n- requests and tool calls together, under 300 ms: {\"kind\":\"http,mcp\",\"by\":\"extension\",\"under\":300}\n- tool calls per tool and client: {\"kind\":\"mcp\",\"by\":\"route,client\"}\n- errors by type, newest first: {\"kind\":\"error\",\"by\":\"type,extension\",\"sort\":\"lastSeen\"}\n- cpu of each machine in 5 minute steps: {\"kind\":\"host\",\"by\":\"host\",\"bucket\":\"5m\",\"since\":\"6h\"}\nmeta.nextCursor goes back as cursor for the next page. For the rows themselves use logs__query.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
@@ -856,7 +877,7 @@
             "type": "string"
           },
           "bucket": {
-            "enum": ["1m", "5m", "1h"],
+            "enum": ["1m", "5m", "1h", "1d"],
             "type": "string"
           },
           "by": {
@@ -878,8 +899,23 @@
             "type": "string"
           },
           "kind": {
-            "description": "what a row is; picks the measures",
-            "enum": ["http", "mcp", "job", "span", "error", "event", "log", "host", "container"],
+            "description": "what a row is, or \"http,mcp\"; picks the measures",
+            "enum": [
+              "http",
+              "mcp",
+              "job",
+              "span",
+              "error",
+              "event",
+              "log",
+              "host",
+              "container",
+              "any",
+              "http,mcp",
+              "mcp,http",
+              "log,event",
+              "event,log"
+            ],
             "type": "string"
           },
           "level": {
@@ -891,6 +927,22 @@
             "maximum": 1000,
             "minimum": 1,
             "type": "integer"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "ok": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "enum": ["true", "false"],
+                "type": "string"
+              }
+            ]
           },
           "order": {
             "enum": ["desc", "asc"],
@@ -936,6 +988,11 @@
           "sub": {
             "pattern": "^[A-Za-z0-9_-]{1,64}$",
             "type": "string"
+          },
+          "under": {
+            "maximum": 600000,
+            "minimum": 1,
+            "type": "integer"
           },
           "until": {
             "anyOf": [

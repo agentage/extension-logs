@@ -42,6 +42,10 @@ export const hostReasons = (h: Host, now = Date.now()): string[] => {
   return now - Date.parse(h.at) > STALE_MS ? ['older than 3 min'] : [];
 };
 
+// The e2e gate seeds hosts named e2e or e2e-...; the widget leaves them out.
+export const realHosts = <T extends { host: string }>(hosts: T[]) =>
+  hosts.filter((h) => !/^e2e(-|$)/.test(h.host));
+
 // Red when availability is a number under 99.0 % or p95 over 1000 ms.
 export const serviceReasons = (s: Service): string[] =>
   hits([

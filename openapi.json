@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "logs",
-    "version": "0.3.0"
+    "version": "0.4.0"
   },
   "components": {
     "securitySchemes": {
@@ -254,6 +254,32 @@
             }
           },
           {
+            "name": "ok",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "enum": ["true", "false"]
+                }
+              ]
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
             "name": "kind",
             "in": "query",
             "required": false,
@@ -270,6 +296,16 @@
               "default": "desc",
               "type": "string",
               "enum": ["desc", "asc"]
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": "ts",
+              "type": "string",
+              "enum": ["ts", "ms"]
             }
           },
           {
@@ -315,7 +351,7 @@
             "required": false,
             "schema": {
               "type": "string",
-              "maxLength": 200
+              "maxLength": 300
             }
           },
           {
@@ -840,6 +876,32 @@
             }
           },
           {
+            "name": "ok",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "enum": ["true", "false"]
+                }
+              ]
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
             "name": "user_type",
             "in": "query",
             "required": false,
@@ -890,7 +952,22 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": ["http", "mcp", "job", "span", "error", "event", "log", "host", "container"]
+              "enum": [
+                "http",
+                "mcp",
+                "job",
+                "span",
+                "error",
+                "event",
+                "log",
+                "host",
+                "container",
+                "any",
+                "http,mcp",
+                "mcp,http",
+                "log,event",
+                "event,log"
+              ]
             }
           },
           {
@@ -908,7 +985,17 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": ["1m", "5m", "1h"]
+              "enum": ["1m", "5m", "1h", "1d"]
+            }
+          },
+          {
+            "name": "under",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 600000
             }
           },
           {

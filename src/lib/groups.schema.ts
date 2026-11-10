@@ -1,15 +1,15 @@
 import { z } from 'zod';
 import { PageCursor, queryKey } from './cursor.js';
 import { FILTER_FIELDS, Order, Since, USER_TYPE, iso, pinnedEnd } from './filters.schema.js';
+import { NAME_RULE, byNames, defOf, nameSql, sortNames } from './kind-def.js';
 import {
   BUCKETS,
   BUCKET_MS,
-  GROUP_KINDS,
-  KIND_DEFS,
+  KIND_LISTS,
+  KIND_NAMES,
   MAX_STEPS,
-  byNames,
-  sortNames,
   type Bucket,
+  type KindDef,
 } from './kinds.js';
 
 // Kept as given, so meta.since echoes it; the read turns it into a time.
@@ -26,9 +26,16 @@ export const FILTER_NAMES = [
 export const GROUP_FIELDS = {
   ...FILTER_FIELDS,
   ...{ user_type: USER_TYPE.optional(), since: When.optional(), until: When.optional() },
-  kind: z.enum(GROUP_KINDS),
+  kind: z
+    .enum(KIND_NAMES, {
+      error: `kind takes ${KIND_NAMES.join(', ')}: a list only of kinds that share measures`,
+    })
+    .transform((kind): string =>
+      Object.hasOwn(KIND_LISTS, kind) ? KIND_LISTS[kind as keyof typeof KIND_LISTS] : kind
+    ),
   by: List.optional(),
   bucket: z.enum(Object.keys(BUCKETS) as [Bucket, ...Bucket[]]).optional(),
+  under: z.coerce.number().int().min(1).max(600_000).optional(),
   ...{ sort: z.string().max(32).optional(), order: Order.optional() },
   limit: z.coerce.number().int().min(1).max(1000).default(100),
   cursor: PageCursor.optional(),
@@ -36,9 +43,12 @@ export const GROUP_FIELDS = {
 type Fields = z.output<z.ZodObject<typeof GROUP_FIELDS>>;
 export type GroupsInput = Fields;
 
+// Only called once the kind passed: its table exists.
+export const defIn = (input: Fields) => defOf(input.kind) as KindDef;
+
 // The sort and order a call means: busiest first, or with a bucket, time oldest first.
 export const sortOf = (input: Fields) => ({
-  sort: input.sort ?? (input.bucket ? 'bucket' : KIND_DEFS[input.kind].sort),
+  sort: input.sort ?? (input.bucket ? 'bucket' : defIn(input).sort),
   order: input.order ?? (input.sort === undefined && input.bucket ? 'asc' : 'desc'),
 });
 export const filtersOf = (input: Fields) =>
@@ -48,13 +58,14 @@ export const filtersOf = (input: Fields) =>
 export const keyOf = (input: Fields) =>
   queryKey({
     ...{ kind: input.kind, by: input.by ?? [], bucket: input.bucket, ...sortOf(input) },
-    ...{ filters: filtersOf(input), since: input.since, until: input.until },
+    ...{ filters: filtersOf(input), since: input.since, until: input.until, under: input.under },
   });
 
 type Issue = { message: string; path: string[] };
 const outside = (given: string[], allowed: string[]) => given.some((n) => !allowed.includes(n));
-const windowIssues = ({ since, until, kind, bucket }: Fields) => {
-  const start = Since.parse(since ?? KIND_DEFS[kind].since);
+const windowIssues = (input: Fields) => {
+  const { since, until, bucket } = input;
+  const start = Since.parse(since ?? defIn(input).since);
   const end = until ? Since.parse(until) : pinnedEnd();
   const steps = bucket ? (Date.parse(iso(end)) - Date.parse(iso(start))) / BUCKET_MS[bucket] : 0;
   return [
@@ -67,19 +78,27 @@ const windowIssues = ({ since, until, kind, bucket }: Fields) => {
     },
   ];
 };
+const paramIssues = (def: KindDef, { under, name }: Fields) => [
+  under !== undefined &&
+    !def.under && { path: ['under'], message: 'under takes the kinds http and mcp' },
+  name !== undefined && !nameSql(def) && { path: ['name'], message: NAME_RULE },
+];
 const issuesOf = (input: Fields): Issue[] => {
-  const by = byNames(input.kind);
-  const sorts = sortNames(input.kind, input.by ?? [], input.bucket !== undefined);
+  const def = defIn(input);
+  const by = byNames(def);
+  const sorts = sortNames(def, input.by ?? [], input.bucket !== undefined, input.under);
   return [
     outside(input.by ?? [], by) && { path: ['by'], message: `by takes ${by.join(', ')}` },
     outside([sortOf(input).sort], sorts) && {
       path: ['sort'],
       message: `sort takes ${sorts.join(', ')}`,
     },
+    ...paramIssues(def, input),
     ...windowIssues(input),
-    input.cursor &&
+    input.cursor?.k !== undefined &&
       input.cursor.k !== keyOf(input) && {
-        ...{ path: ['cursor'], message: 'the cursor belongs to another query' },
+        path: ['cursor'],
+        message: 'the cursor belongs to another query',
       },
   ].filter((issue): issue is Issue => Boolean(issue));
 };

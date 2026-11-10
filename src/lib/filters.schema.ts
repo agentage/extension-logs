@@ -41,5 +41,9 @@ export const FILTER_FIELDS = {
   ...{ extension: name.optional(), part: name.optional(), host: Host.optional() },
   ...{ agcid: Agcid.optional(), sub: Sub.optional(), route: z.string().min(1).max(200).optional() },
   status: z.coerce.number().int().min(0).max(65_535).optional(),
+  // A query string says "true"; a tool call may send the boolean.
+  ok: z.union([z.boolean(), z.enum(['true', 'false']).transform((v) => v === 'true')]).optional(),
+  // The name of an event (fields event.name), as backup.run.
+  name: z.string().min(1).max(200).optional(),
 };
 export const USER_TYPE = z.enum(USER_TYPES);

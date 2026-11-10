@@ -1,5 +1,7 @@
 import { createTestContext, startTestServer, type Caller } from '@agentage/extension';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { eventsKey } from '../lib/events-cursor.js';
+import { SearchSchema } from '../lib/reads.js';
 import { type EventsStore } from '../lib/store.js';
 import { reads } from './reads.js';
 
@@ -128,9 +130,12 @@ describe('the read routes', () => {
     }
   );
 
-  it('answers a cursor from another query with 200, a page from that point', async () => {
-    const other = cursor(['2026-11-10 09:12:03.412', row.id]);
-    expect((await get(`/events?level=error&cursor=${other}`, as('logs:admin'))).status).toBe(200);
+  it('binds the /events cursor to its query: the same query 200, another order or kind 400', async () => {
+    const page = { t: '2026-11-10 09:12:03.412', i: row.id };
+    const own = cursor({ ...page, k: eventsKey(SearchSchema.parse({ level: 'error' })) });
+    expect((await get(`/events?level=error&cursor=${own}`, as('logs:admin'))).status).toBe(200);
+    for (const other of ['level=error&order=asc', 'level=error&kind=http', 'level=warn'])
+      expect((await get(`/events?${other}&cursor=${own}`, as('logs:admin'))).status).toBe(400);
   });
 
   it('answers a store fault as 500 Internal error: no SQL, no store URL, no stack', async () => {

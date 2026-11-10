@@ -48,32 +48,42 @@ through `logs__aggregate` and shows `truncated` in its caption.
 `GET /api/v1/events` (tool `logs__query`) answers rows; `GET /api/v1/stats` with `kind` (tool
 `logs__aggregate`) answers groups. Both take `kind` and the same filters: `since` and `until`
 (`15m`, `2h`, `7d` or an ISO time), `extension`, `part`, `host`, `level`, `route`, `status`, `agcid`,
-`sub`, `q` (text in msg, or an agcid); `/stats` also `user_type`.
+`sub`, `ok` (`true` or `false`), `name` (what `by=name` groups: the event name on `event`, `any` or no kind, the container name
+on `container`; another kind is a 400), `q` (text in msg, or an
+agcid); `/stats` also `user_type`.
 
-- `/events` adds `order` (`desc`, newest first, or `asc`), `limit` (at most 1000) and `cursor`.
-- `/stats` adds `by` (a comma list), `bucket` (`1m`, `5m`, `1h`), `sort` (a measure or a `by` name;
+- `/events` adds `order` (`desc`, newest first, or `asc`), `sort` (`ts`, or `ms` for the slowest
+  first, ties by time), `limit` (at most 1000) and `cursor` (bound to its query: sent with another kind, filter, sort or order it is a 400).
+- `/stats` adds `by` (a comma list), `bucket` (`1m`, `5m`, `1h`, `1d`), `under` (ms, `http` and `mcp`:
+  adds the measure `under`, the share of the group's rows at or under it), `sort` (a measure or a `by` name;
   any other name is a 400 that lists the allowed ones), `order`, `limit` (100, at most 1000) and
   `cursor`. A group without a value sorts last. `meta.nextCursor` pins the window of page 1, so
   every page is cut from the same rows; a cursor sent with another kind, `by`, sort, order or filter
   is a 400. Page 1 ends 5 s before now (unless `until` is given), so a late row cannot move a group
   between pages. A `bucket` draws at most 1500 steps, and a call groups at most 100000 groups (past
   it, 503 busy). Without `kind`, `/stats` answers the 0.2 form (`window`, `extension`); `window`
-  with `kind` is a 400.
+  with `kind` is a 400. `kind` also takes the lists whose kinds share measures,
+  `http,mcp` (one number over both, quantiles and users over the union) and `log,event`, in either
+  order (another list is a 400 that names the allowed ones), and `any` (every row: count, firstSeen, lastSeen); both add `kind` to `by`.
+  Quantiles, averages and percents answer at most 2 decimals, availability and `under` 4.
 
-| kind                                  | `/stats` measures, per group                                |
-| ------------------------------------- | ----------------------------------------------------------- |
-| `http`, `mcp`                         | calls, failed, requests, availability, p50, p95, p99, users |
-| `job`                                 | runs, failed, p50, p95                                      |
-| `span`                                | count, p50, p95, p99                                        |
-| `error`                               | count, lastSeen, sample, agcid                              |
-| `log`, `event`                        | count                                                       |
-| `host` (event `host.stats`)           | cpu, cpu_avg, cpu_max, mem, disk, load1, containers, at     |
-| `container` (event `container.stats`) | cpu, cpu_avg, cpu_max, mem, limit, at                       |
+| kind                                  | `/stats` measures, per group                                                                                  |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `http`, `mcp`                         | calls, failed, requests, availability, p50, p95, p99, users, firstSeen, lastSeen, agcid (with `under`: under) |
+| `job`                                 | runs, failed, p50, p95                                                                                        |
+| `span`                                | count, p50, p95, p99                                                                                          |
+| `error`                               | count, lastSeen, sample, agcid                                                                                |
+| `log`, `event`                        | count                                                                                                         |
+| `host` (event `host.stats`)           | cpu, cpu_avg, cpu_max, mem, mem_max, disk, disk_max, load1, containers, at                                    |
+| `container` (event `container.stats`) | cpu, cpu_avg, cpu_max, mem, mem_max, limit, at                                                                |
+| `any` (every kind)                    | count, firstSeen, lastSeen                                                                                    |
 
 `by` takes `extension`, `part`, `route`, `method`, `status`, `host`, `level`, `client`, `user_type`,
-`sub`, `version`; `error` adds `type`, `container` adds `name`. availability is the admin
+`sub`, `version`; `error` adds `type`, `fingerprint`; `event` and `any` add `name` (the event name),
+`container` adds `name` (the container name); a list of kinds and `any` add `kind`. availability is the admin
 console's formula (5xx, and 502 to 504 at the edge, against requests; a 429 is no request; null under
-50 requests); tests and services are left out of `http` and `mcp` unless `user_type` is given. A
+50 requests); tests and services are left out of `http` and `mcp` unless the call filters on or
+groups by `user_type`. A
 `host` or `container` sample is the newest without `bucket` and the step's average with it. The
 default window is 24 h (`host` 1 h, `container` 5 min); the default sort is the busiest first, with
 `bucket` time oldest first. Every identifier in the SQL comes from the kind's table
@@ -90,6 +100,13 @@ default window is 24 h (`host` 1 h, `container` 5 min); the default sort is the 
 | Containers of one machine              | `/stats?kind=container&host=next-1&by=name`                       |
 | Cpu of each machine in 5 minute steps  | `/stats?kind=host&by=host&bucket=5m&since=6h`                     |
 | Availability of one extension per hour | `/stats?kind=http&extension=probe&bucket=1h&since=24h`            |
+| Requests and tool calls as one number  | `/stats?kind=http,mcp&by=extension&since=24h`                     |
+| Rows per kind                          | `/stats?kind=any&by=kind`                                         |
+| Share under 300 ms per route, worst    | `/stats?kind=http&by=route&under=300&sort=under&order=asc`        |
+| Traffic by type                        | `/stats?kind=http&by=user_type`                                   |
+| Errors by fingerprint                  | `/stats?kind=error&by=fingerprint`                                |
+| Backup runs per day                    | `/stats?kind=event&name=backup.run&bucket=1d&since=14d`           |
+| The slowest failed requests            | `/events?kind=http&ok=false&sort=ms`                              |
 
 ## Scopes
 

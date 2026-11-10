@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { clock, hostReasons, pct, type Host } from './rules.js';
+import { clock, hostReasons, pct, realHosts, type Host } from './rules.js';
 import { Back, Link, mapLoad, Table, useApi, type Row } from './table.js';
 
 interface Container {
@@ -47,6 +47,6 @@ export function Hosts() {
   const [host, setHost] = useState('');
   const load = useApi<Host[]>(HOSTS);
   if (host) return <Containers host={host} back={() => setHost('')} />;
-  const rows = mapLoad(load, (list) => list.map((h) => hostRow(h, setHost)));
+  const rows = mapLoad(load, (list) => realHosts(list).map((h) => hostRow(h, setHost)));
   return <Table caption="hosts" cols={COLS} load={rows} />;
 }

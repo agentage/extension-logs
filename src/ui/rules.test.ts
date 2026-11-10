@@ -3,6 +3,7 @@ import {
   clock,
   hostReasons,
   pct,
+  realHosts,
   serviceReasons,
   services,
   traceHead,
@@ -26,6 +27,18 @@ const row = (rows: Group[]) =>
   services(rows, rows).map(({ extension, part, calls, failed, p95, availability }) => ({
     ...{ extension, part, calls, failed, p95, availability },
   }));
+
+describe('the hosts widget list', () => {
+  it('leaves out the e2e gate hosts, e2e and e2e-..., and keeps every other name', () => {
+    const names = ['e2e', 'e2e-1', 'e2e-gate-a', 'next-1', 'e2ex', 'node-e2e', 'E2E'];
+    expect(realHosts(names.map((name) => host({ host: name }))).map((h) => h.host)).toEqual([
+      'next-1',
+      'e2ex',
+      'node-e2e',
+      'E2E',
+    ]);
+  });
+});
 
 describe('the hosts red rule', () => {
   it('a fresh host under every line has no reason', () => {
