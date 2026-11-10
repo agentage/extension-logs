@@ -51,7 +51,7 @@
     "harness:seed": "node scripts/harness-seed.mjs"
   },
   "dependencies": {
-    "@agentage/extension": "^0.12.1",
+    "@agentage/extension": "^0.12.2",
     "@clickhouse/client": "1.25.0",
     "express": "^5.1.0",
     "zod": "^4.2.0"
