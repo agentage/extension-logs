@@ -15,7 +15,7 @@ owns servers, `/health`, auth, the scheduler and the images.
 | store  | `clickhouse` (manifest kind)        | one `events` table, [`src/lib/ddl.ts`](src/lib/ddl.ts)                  |
 
 The line is `EventSchema` of `@agentage/extension/logs`; the ingest adds two rules (a `ts` inside
-the 30-day TTL, a `usr_` or `svc_` subject). The api, mcp and worker read the store connection
+the 30-day TTL, a subject that is an opaque id `[A-Za-z0-9_-]{1,64}`, never an email). The api, mcp and worker read the store connection
 from the file the estate mounts, `/run/secrets/store-url` (`http://logs:{pw}@logs_store:8123/logs`:
 user, password, host, database), on first use; `/health` of the api carries `checks.clickhouse`
 (a `SELECT 1`) and `checks.disk` (the free bytes of the events table's disks in `system.disks`,

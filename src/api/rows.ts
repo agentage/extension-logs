@@ -6,11 +6,11 @@ const recent = ({ ts }: Event) => {
   const at = Date.parse(ts);
   return at >= Date.now() - 30 * DAY && at <= Date.now() + DAY / 24;
 };
-// The ingest's two rules on top of the line: the TTL window and a usr_ or svc_ subject, never an email.
-const SUB = /^(usr|svc)_[\w-]{1,64}$/;
+// The ingest's two rules on top of the line: the TTL window and an opaque id subject, never an email.
+const SUB = /^[A-Za-z0-9_-]{1,64}$/;
 const LineSchema = EventSchema.refine(recent, 'ts outside the last 30 days').refine(
   ({ sub }) => sub === null || SUB.test(sub),
-  'sub is not usr_ or svc_'
+  'sub is not an opaque id'
 );
 
 const RAW_ERROR = /ERROR|FATAL/;
