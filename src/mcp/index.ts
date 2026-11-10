@@ -7,7 +7,7 @@ import { type EventsStore } from '../lib/store.js';
 
 const pick = { q: true, level: true, extension: true, kind: true, since: true } as const;
 const search = R.SearchSchema.pick(pick).extend({ limit: z.int().min(1).max(200).default(20) });
-const hosts = z.object({ host: z.string().min(1).max(253).optional() });
+const hosts = z.object({ host: R.Host.optional() });
 const many = <T extends z.ZodType>(row: T) => z.array(row).optional();
 type Args = never;
 

@@ -35,14 +35,21 @@ const cursorOf = (row: Row) =>
 
 const name = z.string().min(1).max(64);
 export const Agcid = z.string().regex(/^[0-9a-f]{32}$/);
+// A hostname: no slash, no '..', so a path segment never reads as another route.
+export const Host = z.string().regex(/^(?!.*\.\.)[A-Za-z0-9][\w.-]{0,252}$/);
 export const SearchSchema = z.object({
   ...{ q: z.string().min(1).max(200).optional(), level: z.enum(LEVELS).optional() },
   ...{ extension: name.optional(), part: name.optional(), kind: z.enum(KINDS).optional() },
-  ...{ agcid: Agcid.optional(), host: name.optional() },
+  ...{ agcid: Agcid.optional(), host: Host.optional() },
   ...{ since: Since.prefault('24h'), until: Since.optional(), cursor: Cursor.optional() },
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 export type Search = z.output<typeof SearchSchema>;
+// The route's query: an empty window is a mistake, not an empty page.
+export const SearchQuery = SearchSchema.refine(
+  ({ since, until }) => until === undefined || since < until,
+  { message: 'since must be before until', path: ['since'] }
+);
 export const StatsSchema = z.object({
   window: z.enum(['15m', '1h', '24h']).default('1h'),
   extension: name.optional(),

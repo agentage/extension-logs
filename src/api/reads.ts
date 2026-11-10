@@ -17,14 +17,14 @@ const page = async (store: EventsStore, input: R.Search) => {
 };
 
 const agcid = z.object({ agcid: R.Agcid });
-const host = z.object({ host: z.string().min(1).max(253) });
+const host = z.object({ host: R.Host });
 // Any account can mint logs:read for itself, so every read needs logs:admin.
 const READS = [
   {
     path: '/events',
     summary: 'Search events',
     scope: 'admin',
-    input: R.SearchSchema,
+    input: R.SearchQuery,
     output: z.array(O.EventOutSchema),
     run: (s: EventsStore, r: Req) => page(s, r.input),
   },
@@ -38,7 +38,7 @@ const READS = [
   },
   {
     path: '/stats',
-    summary: 'Calls, errors, availability, latency',
+    summary: 'Calls, errors, availability, latency: the top 1000 groups by calls',
     scope: 'admin',
     input: R.StatsSchema,
     output: z.array(O.StatOutSchema),

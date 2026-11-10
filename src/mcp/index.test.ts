@@ -55,4 +55,13 @@ describe('the logs tools', () => {
       host: 'next-1',
     });
   });
+
+  it.each([{ host: '../x' }, { host: 'a/b' }])(
+    'hosts refuses %o before the store',
+    async (args) => {
+      query.mockClear();
+      await expect(server.call('hosts', args)).rejects.toThrow();
+      expect(query).not.toHaveBeenCalled();
+    }
+  );
 });
