@@ -22,14 +22,17 @@ jobs:
     services:
       clickhouse:
         image: clickhouse/clickhouse-server:26.8
+        # The estate's store user: CLICKHOUSE_USER and CLICKHOUSE_DB, never default.
         env:
+          CLICKHOUSE_USER: logs
+          CLICKHOUSE_DB: logs
           CLICKHOUSE_PASSWORD: ci
         ports: ['8123:8123']
         options: >-
-          --health-cmd "clickhouse-client --password ci -q 'SELECT 1'"
+          --health-cmd "clickhouse-client --user logs --password ci -q 'SELECT 1'"
           --health-interval 5s --health-retries 20
     env:
-      CLICKHOUSE_URL: http://default:ci@localhost:8123
+      CLICKHOUSE_URL: http://logs:ci@localhost:8123/logs
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -87,7 +90,7 @@ jobs:
 
       # up (kit 0.12) runs no clickhouse store: the parts reach this one through the docker host.
       - name: ClickHouse 26.8 for the parts
-        run: docker run -d --name logs-store -p 8123:8123 -e CLICKHOUSE_PASSWORD=local clickhouse/clickhouse-server:26.8
+        run: docker run -d --name logs-store -p 8123:8123 -e CLICKHOUSE_USER=logs -e CLICKHOUSE_DB=logs -e CLICKHOUSE_PASSWORD=local clickhouse/clickhouse-server:26.8
 
       # The estate mounts /run/secrets/store-url and refuses it declared; up mounts declared secrets only.
       - name: Declare store-url for this run only (README, Run)
@@ -96,7 +99,7 @@ jobs:
       # The cli and its kit come from this lockfile: a cli or kit patch needs a commit here.
       - name: agentage extension up (the release recipes, dev issuer, gateway)
         env:
-          AGENTAGE_SECRET_STORE_URL: http://default:local@172.17.0.1:8123
+          AGENTAGE_SECRET_STORE_URL: http://logs:local@172.17.0.1:8123/logs
         run: node_modules/.bin/agentage extension up
 
       - name: Ingest through the gateway lands in ClickHouse (p0 ingest, local)
@@ -110,7 +113,7 @@ jobs:
           line="{\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%S.000Z)\",\"level\":\"info\",\"kind\":\"log\",\"msg\":\"ci ingest\",\"extension\":\"logs\",\"part\":\"ci\"}"
           curl -sf -H "authorization: Bearer $T" -H 'content-type: application/json' \
             -d "[$line,$line]" localhost:4280/api/v1/events | tee /dev/stderr | jq -e '.data == {accepted: 2, rejected: 0}'
-          n=$(docker exec logs-store clickhouse-client --password local -q "SELECT count() FROM events WHERE msg = 'ci ingest'")
+          n=$(docker exec logs-store clickhouse-client --user logs --password local -d logs -q "SELECT count() FROM events WHERE msg = 'ci ingest'")
           echo "rows: $n"; test "$n" = 2
 
       - name: The widget a11y test through the local gateway (src/**/*.spec.ts)

@@ -107,4 +107,39 @@ describe('POST /api/v1/events', () => {
     });
     expect(store.insert).not.toHaveBeenCalled();
   });
+
+  describe('what the redaction keeps', () => {
+    const stored = async (line: object) => {
+      expect(await (await post([line])).json()).toEqual(ok({ accepted: 1, rejected: 0 }));
+      return (store.insert.mock.calls[0] as unknown as [Record<string, unknown>[]])[0][0] ?? {};
+    };
+
+    it('an agcid, a sha and a UUID in msg and fields are stored unchanged', async () => {
+      const agcid = '0193a1f0c3d18b5e9f3a6c4d0e8b7f03';
+      const sha = 'ba825dc5faa564ede337567584abe917d786093f';
+      const uuid = '01a1c251-6d38-7407-ad7b-4bedc9fc47b3';
+      const msg = `trace ${agcid} at ${sha} row ${uuid}`;
+      const fields = { 'agentage.commit': sha, 'agentage.row': uuid, 'agentage.seen': agcid };
+      expect(await stored({ ...LINES.log, msg, fields })).toMatchObject({ msg, fields });
+    });
+
+    it('an error row keeps a 2000-character stack', async () => {
+      const stack = `Error: forced\n${'    at f (file.js:1:1)\n'.repeat(120)}`.slice(0, 2000);
+      const fields = { ...LINES.error.fields, 'exception.stacktrace': stack };
+      const row = await stored({ ...LINES.error, fields });
+      expect((row['fields'] as Record<string, string>)['exception.stacktrace']).toBe(stack);
+    });
+
+    it('a host.stats row keeps its numbers', async () => {
+      const fields = {
+        'event.name': 'host.stats',
+        'agentage.host.cpu_pct': 12.4,
+        'agentage.host.mem_pct': 61,
+        'agentage.host.disk_pct': 34.1,
+        'agentage.host.load1': 0.42,
+        'agentage.host.containers': 2,
+      };
+      expect(await stored({ ...LINES.event, fields })).toMatchObject({ fields });
+    });
+  });
 });

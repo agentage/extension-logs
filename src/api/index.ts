@@ -8,7 +8,7 @@ import { reads } from './reads.js';
 export function create({ route, log, health }: ApiContext) {
   const { ch, store } = openStore(log);
   health('clickhouse', clickhouseCheck(ch));
-  health('disk', diskCheck(ch));
+  health('disk', diskCheck(ch, log));
   void store.ready().catch(() => undefined);
   ingest(route, store);
   reads(route, store);

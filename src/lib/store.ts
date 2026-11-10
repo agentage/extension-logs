@@ -86,33 +86,41 @@ export const clickhouseCheck = (ch: Clickhouse) => async () =>
   (await ch.ping()) ? ('ok' as const) : ('unavailable' as const);
 
 const GIB = 1024 ** 3;
-// The estate keeps a 1 GiB reserve the store will not write into; 1.5 GiB warns first. No row reads unavailable.
-const FREE = 'SELECT min(free_space) AS free FROM system.disks';
-export const diskCheck = (ch: Clickhouse) => async () => {
-  const [row] = await ch.query<{ free: number }>(FREE, {}, AbortSignal.timeout(PING_MS));
-  const free = Number(row?.free);
-  if (!(free >= GIB)) return 'unavailable' as const;
-  return free < 1.5 * GIB ? ('degraded' as const) : ('ok' as const);
+// The disks of the events table's policy (default before the table exists); unreserved_space already
+// leaves out the estate's 1 GiB keep_free_space, so the disk's own free bytes are the two added.
+const FREE = `SELECT min(unreserved_space + keep_free_space) AS free FROM system.disks
+WHERE has((SELECT any(disks) FROM system.storage_policies WHERE policy_name = coalesce(nullIf((
+  SELECT any(storage_policy) FROM system.tables WHERE database = currentDatabase() AND name = 'events'
+), ''), 'default')), name)`;
+// Never unavailable: a full disk stops writes (503 on ingest) while reads still serve the operator.
+export const diskCheck = (ch: Clickhouse, log: Log) => async () => {
+  try {
+    const [row] = await ch.query<{ free: number }>(FREE, {}, AbortSignal.timeout(PING_MS));
+    return Number(row?.free) >= 1.5 * GIB ? ('ok' as const) : ('degraded' as const);
+  } catch (err) {
+    log.warn('checks.disk cannot read system.disks', { reason: messageOf(err) });
+    return 'degraded' as const;
+  }
 };
 
 const OUTAGE = /^(ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EHOSTUNREACH|EPIPE)$/;
-// ClickHouse's own limits: 159 timeout, 202 too many queries, 241 memory, 252 too many parts, 396 rows.
-const BUSY = /^(159|202|241|252|396)$/;
-// It cannot write: 243 no space, 242 table read-only, 204 fsync, 294 and 75 write, 173 allocate.
-const FULL = /^(243|242|204|294|75|173)$/;
+// ClickHouse's own limits: 159 timeout, 202 too many queries, 241 and 173 memory, 252 parts, 396 rows.
+const BUSY = /^(159|202|241|173|252|396)$/;
+// It cannot write: 243 no space, 242 table read-only, 204 fsync, 294 and 75 write.
+const FULL = /^(243|242|204|294|75)$/;
 const codeOf = (err: unknown) => String((err as { code?: unknown } | null)?.code);
 const messageOf = (err: unknown) => (err instanceof Error ? err.message : String(err));
 export const isOutage = (err: unknown): boolean =>
   OUTAGE.test(codeOf(err)) || /timeout/i.test(messageOf(err));
 
 // A connection fault or a store limit is a 503 with a warning; any other error passes through.
-const reasonOf = (err: unknown) => {
+const reasonOf = (err: unknown, write: boolean) => {
   if (BUSY.test(codeOf(err))) return 'The store is busy: narrow the query or retry';
-  if (FULL.test(codeOf(err))) return 'The store cannot write now: retry later';
-  return isOutage(err) ? 'The store is unavailable' : undefined;
+  if (FULL.test(codeOf(err)) && write) return 'The store cannot write now: retry later';
+  return isOutage(err) || FULL.test(codeOf(err)) ? 'The store is unavailable' : undefined;
 };
-const unavailable = (log: Log) => (err: unknown) => {
-  const reason = reasonOf(err);
+const unavailable = (log: Log, write: boolean) => (err: unknown) => {
+  const reason = reasonOf(err, write);
   if (!reason) throw err;
   log.warn('store unavailable', { reason: messageOf(err) });
   throw fail('UNAVAILABLE', reason);
@@ -135,10 +143,11 @@ export const createEventsStore = (ch: Clickhouse, log: Log): EventsStore => {
       table = undefined;
       throw err;
     }));
-  const guard = <T>(work: () => Promise<T>): Promise<T> => ddl().then(work).catch(unavailable(log));
+  const guard = <T>(work: () => Promise<T>, write = false): Promise<T> =>
+    ddl().then(work).catch(unavailable(log, write));
   return {
     ready: () => guard(async () => undefined),
-    insert: (rows) => guard(() => ch.insert('events', rows, tokenOf(rows))),
+    insert: (rows) => guard(() => ch.insert('events', rows, tokenOf(rows)), true),
     query: (sql, params) => guard(() => ch.query(sql, params)),
   };
 };
