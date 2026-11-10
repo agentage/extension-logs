@@ -56,9 +56,10 @@ describe('the /stats builder', () => {
 
   it('defaults: busiest first, the kind window, page 1 ends 5 s ago', () => {
     expect(plan({ kind: 'job' })).toMatchObject({ sort: 'runs', order: 'desc', limit: 100 });
-    const lag = Date.now() - Date.parse(`${plan({ kind: 'job' }).until.replace(' ', 'T')}Z`);
-    expect(lag).toBeGreaterThanOrEqual(5_000);
-    expect(lag).toBeLessThan(6_000);
+    const before = Date.now();
+    const until = Date.parse(`${plan({ kind: 'job' }).until.replace(' ', 'T')}Z`);
+    expect(until).toBeGreaterThanOrEqual(before - 5_001);
+    expect(until).toBeLessThanOrEqual(Date.now() - 5_000);
     expect(plan({ kind: 'container' }).since < plan({ kind: 'http' }).until).toBe(true);
   });
 });
