@@ -32,7 +32,8 @@ describe.runIf(store)('the events table on ClickHouse', () => {
 
   it('stores one row per line, with the time and the agcid as sent', async () => {
     const rows = await store!.query<{ kind: string; ts: string; agcid: string | null }>(
-      'SELECT kind, toString(ts) AS ts, agcid FROM events ORDER BY kind'
+      // The load test's rows are left out, so the order the tests run in does not matter.
+      "SELECT kind, toString(ts) AS ts, agcid FROM events WHERE NOT startsWith(msg, 'load ') ORDER BY kind"
     );
     expect(rows.map((row) => row.kind)).toEqual([
       'error',

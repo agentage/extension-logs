@@ -63,11 +63,17 @@ const json = (body: unknown, status = 200) => ({
 const answer = (path: string) =>
   DATA[path.includes('/containers') ? 'containers' : (path.split('/')[3] ?? '')];
 
-// The first answer comes late and with three rows, after the newer one has landed.
+// The first answer is held until the test releases it, after the newer one has landed: no timer.
+let release: () => void = () => undefined;
 const slowly = async (route: Route) => {
-  await new Promise((resolve) => setTimeout(resolve, 1500));
+  await new Promise<void>((resolve) => (release = resolve));
   await route.fulfill(json({ success: true, data: [1, 2, 3].map((i) => event(i, 'info')) }));
 };
+// Two frames after an answer: the widget has read it and rendered.
+const settle = (page: Page) =>
+  page.evaluate(
+    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))
+  );
 
 type Mode = 'data' | 'empty' | 'error' | 'forbidden' | 'unauthorized' | 'offline' | 'hang';
 const NOTE = 'truncated: more than 200 routes in a part or 1000 in all; narrow by extension';
@@ -179,7 +185,10 @@ test('events: a slow answer for an older filter never replaces the newer one', a
   const { el } = await open(page, 'events', 'data', '/api/v1/events?limit=100');
   await el.getByLabel('level').selectOption('error');
   await expect(el.locator('tbody tr')).toHaveCount(2);
-  await page.waitForTimeout(2000);
+  const late = page.waitForResponse((res) => res.url().endsWith('/api/v1/events?limit=100'));
+  release();
+  await late;
+  await settle(page);
   await expect(el.locator('tbody tr')).toHaveCount(2);
 });
 

@@ -97,7 +97,7 @@ export const VISITS = [
   }),
   { ...http(240, 'platform', 'store', { 'agentage.raw': true }), msg: 'LOG: checkpoint complete' },
   http(230, 'probe', 'api', machines(200, 5), { user_type: 'test', msg: 'test traffic' }),
-  stat('next-1', 60, 12.4),
+  stat('next-1', 75, 12.4),
   stat('next-1', 600, 50),
   stat('next-2', 30, 91),
   stat('next-gw', 400, 5),
