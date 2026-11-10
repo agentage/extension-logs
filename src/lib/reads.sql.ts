@@ -2,7 +2,7 @@
 const num = (path: string) => `CAST(fields.agentage.${path}, 'Nullable(Float64)')`;
 const str = (path: string) => `ifNull(CAST(fields.${path}, 'Nullable(String)'), '')`;
 
-export const COLUMNS = `id, ts, level, kind, msg, extension, part,
+const COLUMNS = `id, ts, level, kind, msg, extension, part,
   version, host, agcid, sub, session, user_type, client, method, route, status, ms, ok, fields`;
 
 export const FILTERS = {

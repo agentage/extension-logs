@@ -3,7 +3,7 @@ import { fail, type Log } from '@agentage/extension';
 import { type Connection } from './connection.js';
 import { EVENTS_DDL } from './ddl.js';
 
-export type Params = Record<string, unknown>;
+type Params = Record<string, unknown>;
 export type Row = Record<string, unknown>;
 
 // The narrow face of @clickhouse/client the parts use; tests pass a fake.
@@ -20,9 +20,15 @@ export interface EventsStore {
   query<T = Row>(sql: string, params?: Params): Promise<T[]>;
 }
 
-const ISO_TS = { date_time_input_format: 'best_effort' } as const;
+const WRITES = {
+  format: 'JSONEachRow',
+  clickhouse_settings: { date_time_input_format: 'best_effort' },
+} as const;
 // Counts as JSON numbers, not quoted UInt64; the server stops a read before the client's 10 s.
-const READS = { output_format_json_quote_64bit_integers: 0, max_execution_time: 9 } as const;
+const READS = {
+  format: 'JSONEachRow',
+  clickhouse_settings: { output_format_json_quote_64bit_integers: 0, max_execution_time: 9 },
+} as const;
 // Under the kit's 1 s health bound, so a hung store never stacks probes.
 const PING_MS = 900;
 
@@ -30,19 +36,11 @@ export const clickhouse = (connection: Connection): Clickhouse => {
   // Its own logger writes plain-text lines to stderr; failures reach the part's JSON log instead.
   const log = { level: ClickHouseLogLevel.OFF };
   const client = createClient({ ...connection, request_timeout: 10_000, log });
-  const settings = { format: 'JSONEachRow', clickhouse_settings: ISO_TS } as const;
   return {
     command: async (query) => void (await client.command({ query })),
-    insert: async (table, values) => void (await client.insert({ table, values, ...settings })),
+    insert: async (table, values) => void (await client.insert({ table, values, ...WRITES })),
     query: async <T = Row>(query: string, query_params?: Params) =>
-      (
-        await client.query({
-          query,
-          query_params,
-          format: 'JSONEachRow',
-          clickhouse_settings: READS,
-        })
-      ).json<T>(),
+      (await client.query({ query, query_params, ...READS })).json<T>(),
     ping: async () =>
       (await client.ping({ select: true, abort_signal: AbortSignal.timeout(PING_MS) })).success,
   };
@@ -76,6 +74,13 @@ const messageOf = (err: unknown) => (err instanceof Error ? err.message : String
 export const isOutage = (err: unknown): boolean =>
   OUTAGE.test(String((err as { code?: unknown } | null)?.code)) || /timeout/i.test(messageOf(err));
 
+// A connection fault is a 503 with a warning; any other error passes through as it is.
+const unavailable = (log: Log) => (err: unknown) => {
+  if (!isOutage(err)) throw err;
+  log.warn('store unavailable', { reason: messageOf(err) });
+  throw fail('UNAVAILABLE', 'The store is unavailable');
+};
+
 // The DDL runs at start and, if the store was down then, again before the next use.
 export const createEventsStore = (ch: Clickhouse, log: Log): EventsStore => {
   let table: Promise<void> | undefined;
@@ -84,16 +89,7 @@ export const createEventsStore = (ch: Clickhouse, log: Log): EventsStore => {
       table = undefined;
       throw err;
     }));
-  const guard = async <T>(work: () => Promise<T>): Promise<T> => {
-    try {
-      await ddl();
-      return await work();
-    } catch (err) {
-      if (!isOutage(err)) throw err;
-      log.warn('store unavailable', { reason: messageOf(err) });
-      throw fail('UNAVAILABLE', 'The store is unavailable');
-    }
-  };
+  const guard = <T>(work: () => Promise<T>): Promise<T> => ddl().then(work).catch(unavailable(log));
   return {
     ready: () => guard(async () => undefined),
     insert: (rows) => guard(() => ch.insert('events', rows)),

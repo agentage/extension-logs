@@ -1,4 +1,4 @@
-// store/001-events.sql verbatim (ddl.test.ts diffs them): the image carries dist/lib, not store/.
+// The events table, logs-events section 3 verbatim.
 export const EVENTS_DDL = `CREATE TABLE IF NOT EXISTS events (      -- run by the api at start; idempotent
   id         UUID DEFAULT generateUUIDv7(), -- for paging: the cursor is (ts, id)
   ts         DateTime64(3, 'UTC'),
