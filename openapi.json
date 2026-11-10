@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "logs",
-    "version": "0.2.0"
+    "version": "0.2.1"
   },
   "components": {
     "securitySchemes": {
@@ -230,8 +230,7 @@
             "required": false,
             "schema": {
               "type": "string",
-              "minLength": 1,
-              "maxLength": 64
+              "pattern": "^(?!.*\\.\\.)[A-Za-z0-9][\\w.-]{0,252}$"
             }
           },
           {
@@ -708,7 +707,7 @@
     },
     "/api/v1/stats": {
       "get": {
-        "summary": "Calls, errors, availability, latency",
+        "summary": "Calls, errors, availability, latency: the top 1000 groups by calls",
         "security": [
           {
             "pat": ["logs:admin"]
@@ -965,8 +964,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
-              "maxLength": 253
+              "pattern": "^(?!.*\\.\\.)[A-Za-z0-9][\\w.-]{0,252}$"
             }
           }
         ],

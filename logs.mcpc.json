@@ -1,7 +1,7 @@
 {
   "serverInfo": {
     "name": "agentage-logs",
-    "version": "0.2.0"
+    "version": "0.2.1"
   },
   "tools": [
     {
@@ -519,8 +519,7 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
           "host": {
-            "maxLength": 253,
-            "minLength": 1,
+            "pattern": "^(?!.*\\.\\.)[A-Za-z0-9][\\w.-]{0,252}$",
             "type": "string"
           }
         },
