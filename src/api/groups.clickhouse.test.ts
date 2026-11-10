@@ -93,7 +93,8 @@ describe.runIf(s)('GET /stats with kind on ClickHouse', () => {
       cursor = page.meta.nextCursor;
     }
     expect(walked).toEqual(['/busy', '/quiet', '/slow']);
-    expect((await ask(query)).groups[0]).toMatchObject({ route: '/late' });
+    const ahead = new Date(Date.now() + 60_000).toISOString();
+    expect((await ask({ ...query, until: ahead })).groups[0]).toMatchObject({ route: '/late' });
   });
 
   it('host by host: the newest sample, the window average and peak, its time', async () => {

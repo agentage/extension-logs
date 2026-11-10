@@ -5,6 +5,8 @@ const UNIT = { m: 60_000, h: 3_600_000, d: 86_400_000 } as const;
 export const STAMP = /^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{3}$/;
 export const stamp = (date: Date) => date.toISOString().replace('T', ' ').replace('Z', '');
 export const iso = (ts: unknown) => `${String(ts).replace(' ', 'T')}Z`;
+// A window ends 5 s ago: a row that lands late with an older ts cannot move groups between pages.
+export const pinnedEnd = () => stamp(new Date(Date.now() - 5_000));
 const back = (s: string) => Number(s.slice(0, -1)) * UNIT[s.at(-1) as keyof typeof UNIT];
 
 // 15m, 2h, 7d back from now, or an ISO time; ClickHouse reads it as DateTime64(3, 'UTC').
@@ -15,6 +17,15 @@ export const Since = z.union([
     .transform((s) => stamp(new Date(Date.now() - back(s)))),
   z.iso.datetime({ offset: true }).transform((s) => stamp(new Date(s))),
 ]);
+
+// base64url JSON, or null so the schema after it refuses the cursor.
+export const decodeCursor = (cursor: string): unknown => {
+  try {
+    return JSON.parse(Buffer.from(cursor, 'base64url').toString());
+  } catch {
+    return null;
+  }
+};
 
 export const name = z.string().min(1).max(64);
 export const Agcid = z.string().regex(/^[0-9a-f]{32}$/);

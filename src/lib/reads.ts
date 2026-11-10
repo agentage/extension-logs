@@ -1,22 +1,24 @@
 import { z } from 'zod';
-import { Agcid, FILTER_FIELDS, Host, Order, Since, STAMP, iso } from './filters.schema.js';
+import {
+  Agcid,
+  FILTER_FIELDS,
+  Host,
+  Order,
+  Since,
+  STAMP,
+  decodeCursor,
+  iso,
+} from './filters.schema.js';
 import { GROUP_FIELDS, checkGroups } from './groups.schema.js';
 import { GROUP_KINDS, KIND_DEFS } from './kinds.js';
 import * as SQL from './reads.sql.js';
 import { type EventsStore, type Row } from './store.js';
 
-const decode = (cursor: string): unknown => {
-  try {
-    return JSON.parse(Buffer.from(cursor, 'base64url').toString());
-  } catch {
-    return null;
-  }
-};
 // base64url of [ts, id] of the last row; anything else is a 400.
 const Cursor = z
   .string()
   .max(200)
-  .transform(decode)
+  .transform(decodeCursor)
   .pipe(z.tuple([z.string().regex(STAMP), z.uuid()]));
 const cursorOf = (row: Row) =>
   Buffer.from(JSON.stringify([row['ts'], row['id']])).toString('base64url');
@@ -41,9 +43,21 @@ export const StatsSchema = z.object({
   extension: FILTER_FIELDS.extension,
 });
 // GET /stats: with kind the groups read, without it today's answer (window, extension).
+// window belongs to the 0.2 form: with kind it is a 400, never silently ignored.
 export const StatsQuery = z
-  .object({ ...GROUP_FIELDS, ...StatsSchema.shape, kind: GROUP_FIELDS.kind.optional() })
-  .superRefine(checkGroups);
+  .object({
+    ...{ ...GROUP_FIELDS, extension: StatsSchema.shape.extension },
+    ...{ window: StatsSchema.shape.window.unwrap().optional(), kind: GROUP_FIELDS.kind.optional() },
+  })
+  .superRefine((input, ctx) => {
+    if (input.kind && input.window)
+      ctx.addIssue({
+        code: 'custom',
+        path: ['window'],
+        message: 'window is the form without kind: use since',
+      });
+    checkGroups(input, ctx);
+  });
 export const ErrorsSchema = z.object({
   since: Since.prefault('24h'),
   extension: FILTER_FIELDS.extension,

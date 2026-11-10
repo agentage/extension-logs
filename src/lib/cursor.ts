@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import { STAMP } from './filters.schema.js';
+import { STAMP, decodeCursor } from './filters.schema.js';
 
 // What a /stats page cursor holds: the offset, the pinned window, the query it belongs to.
 const PageSchema = z.strictObject({
@@ -11,14 +11,7 @@ const PageSchema = z.strictObject({
 });
 export type Page = z.output<typeof PageSchema>;
 
-const decode = (cursor: string): unknown => {
-  try {
-    return JSON.parse(Buffer.from(cursor, 'base64url').toString());
-  } catch {
-    return null;
-  }
-};
-export const PageCursor = z.string().max(300).transform(decode).pipe(PageSchema);
+export const PageCursor = z.string().max(300).transform(decodeCursor).pipe(PageSchema);
 export const encodePage = (page: Page) => Buffer.from(JSON.stringify(page)).toString('base64url');
 
 // The query's identity without its page: a cursor from another kind, by, sort, order or filter is refused.

@@ -24,6 +24,9 @@ export const BUCKETS = {
   '1h': 'INTERVAL 1 HOUR',
 };
 export type Bucket = keyof typeof BUCKETS;
+export const BUCKET_MS: Record<Bucket, number> = { '1m': 60_000, '5m': 300_000, '1h': 3_600_000 };
+// One call draws at most this many time steps (30 d of 1h, 5 d of 5m, 24 h of 1m).
+export const MAX_STEPS = 1500;
 export const COLUMNS = [
   ...['extension', 'part', 'route', 'method', 'status', 'host', 'level'],
   ...['client', 'user_type', 'sub', 'version'],

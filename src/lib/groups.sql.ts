@@ -1,4 +1,12 @@
-import { BUCKETS, KIND_DEFS, type Bucket, type GroupKind, type Measure } from './kinds.js';
+import {
+  BUCKETS,
+  KIND_DEFS,
+  byNames,
+  sortNames,
+  type Bucket,
+  type GroupKind,
+  type Measure,
+} from './kinds.js';
 import { FILTERS } from './reads.sql.js';
 
 // A planned /stats call: every name here was checked against the kind's closed lists.
@@ -50,8 +58,18 @@ const orderOf = ({ sort, order, by, bucket }: GroupPlan) => {
   return [`${quote(sort)} ${DIR[order]} NULLS LAST`, ...keys.map(quote)].join(', ');
 };
 
+// The builder trusts no caller: a name outside the kind's lists never becomes SQL.
+const guard = ({ kind, by, bucket, sort }: GroupPlan) => {
+  const known = Object.hasOwn(KIND_DEFS, kind) && (!bucket || Object.hasOwn(BUCKETS, bucket));
+  if (!known || by.some((name) => !byNames(kind).includes(name)))
+    throw new Error('groupsSql: a kind, bucket or by outside the closed lists');
+  if (!sortNames(kind, by, bucket !== undefined).includes(sort))
+    throw new Error('groupsSql: a sort outside the closed lists');
+};
+
 // Identifiers from the kind's table, values as parameters; the inner select hides measure aliases.
 export const groupsSql = (plan: GroupPlan) => {
+  guard(plan);
   const keys = [...(plan.bucket ? ['bucket'] : []), ...plan.by];
   const group = keys.length > 0 ? `GROUP BY ${keys.map(quote).join(', ')} ` : '';
   return `SELECT ${[...keysOf(plan), ...measuresOf(plan)].join(', ')}

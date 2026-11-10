@@ -1,7 +1,16 @@
 import { z } from 'zod';
 import { PageCursor, queryKey } from './cursor.js';
-import { FILTER_FIELDS, Order, Since, USER_TYPE } from './filters.schema.js';
-import { BUCKETS, GROUP_KINDS, KIND_DEFS, byNames, sortNames, type Bucket } from './kinds.js';
+import { FILTER_FIELDS, Order, Since, USER_TYPE, iso, pinnedEnd } from './filters.schema.js';
+import {
+  BUCKETS,
+  BUCKET_MS,
+  GROUP_KINDS,
+  KIND_DEFS,
+  MAX_STEPS,
+  byNames,
+  sortNames,
+  type Bucket,
+} from './kinds.js';
 
 // Kept as given, so meta.since echoes it; the read turns it into a time.
 const When = z.union([z.string().regex(/^\d{1,4}[mhd]$/), z.iso.datetime({ offset: true })]);
@@ -44,18 +53,30 @@ export const keyOf = (input: Fields) =>
 
 type Issue = { message: string; path: string[] };
 const outside = (given: string[], allowed: string[]) => given.some((n) => !allowed.includes(n));
+const windowIssues = ({ since, until, kind, bucket }: Fields) => {
+  const start = Since.parse(since ?? KIND_DEFS[kind].since);
+  const end = until ? Since.parse(until) : pinnedEnd();
+  const steps = bucket ? (Date.parse(iso(end)) - Date.parse(iso(start))) / BUCKET_MS[bucket] : 0;
+  return [
+    start >= end && { path: ['since'], message: 'since must be before until' },
+    steps > MAX_STEPS && {
+      ...{
+        path: ['bucket'],
+        message: `at most ${MAX_STEPS} steps: a larger bucket or a shorter since`,
+      },
+    },
+  ];
+};
 const issuesOf = (input: Fields): Issue[] => {
   const by = byNames(input.kind);
   const sorts = sortNames(input.kind, input.by ?? [], input.bucket !== undefined);
-  const since = Since.parse(input.since ?? KIND_DEFS[input.kind].since);
-  const until = input.until && Since.parse(input.until);
   return [
     outside(input.by ?? [], by) && { path: ['by'], message: `by takes ${by.join(', ')}` },
     outside([sortOf(input).sort], sorts) && {
       path: ['sort'],
       message: `sort takes ${sorts.join(', ')}`,
     },
-    until && since >= until && { path: ['since'], message: 'since must be before until' },
+    ...windowIssues(input),
     input.cursor &&
       input.cursor.k !== keyOf(input) && {
         ...{ path: ['cursor'], message: 'the cursor belongs to another query' },

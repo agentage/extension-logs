@@ -58,6 +58,20 @@ describe('GET /stats with kind', () => {
     expect((await get('/stats?window=2d')).status).toBe(400);
   });
 
+  it('window with kind answers 400: window is the form without kind', async () => {
+    const { error } = await body('/stats?kind=http&window=24h');
+    expect(error.details).toEqual([
+      { field: 'window', message: expect.stringMatching(/use since/) },
+    ]);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('a bucket past 1500 steps answers 400 before the store', async () => {
+    const { error } = await body('/stats?kind=http&since=30d&bucket=1m');
+    expect(error.details[0]?.field).toBe('bucket');
+    expect(query).not.toHaveBeenCalled();
+  });
+
   it('a wrong sort answers 400 with the names the kind allows', async () => {
     const { error } = await body('/stats?kind=host&sort=calls');
     expect(error.code).toBe('VALIDATION_ERROR');

@@ -19,9 +19,10 @@ const page = async (store: EventsStore, input: R.Search) => {
 };
 
 // With kind the groups of the two-reads API; without it today's fixed answer.
-const stats = async (store: EventsStore, input: R.Stats & Partial<GroupsInput>) => {
+const stats = async (store: EventsStore, input: z.output<typeof R.StatsQuery>) => {
   if (input.kind === undefined) {
-    const { stats: rows, truncated } = await R.stats(store, input);
+    const { window = '1h', extension } = input;
+    const { stats: rows, truncated } = await R.stats(store, { window, extension });
     return reply(rows, { meta: { truncated } });
   }
   const { groups: rows, meta } = await groups(store, input as GroupsInput);

@@ -42,8 +42,23 @@ describe('the /stats builder', () => {
     expect(groupsParams(p)).toMatchObject({ q: "x' OR 1=1", status: 500, limit: 11, offset: 0 });
   });
 
-  it('defaults: busiest first, the kind window, page 1 pinned to now', () => {
+  it('throws on a hostile sort or by handed to it directly, past every schema', () => {
+    const safe = plan({ kind: 'http', by: 'route' });
+    const bad = [
+      { ...safe, sort: 'calls; DROP TABLE events --' },
+      { ...safe, by: ['route', 'route) OR 1=1 --'] },
+      { ...safe, by: ['route', 'name'], sort: 'name' },
+      { ...safe, bucket: '1d) --' as never },
+      { ...safe, kind: 'users' as never },
+    ];
+    for (const p of bad) expect(() => groupsSql(p)).toThrow(/^groupsSql: /);
+  });
+
+  it('defaults: busiest first, the kind window, page 1 ends 5 s ago', () => {
     expect(plan({ kind: 'job' })).toMatchObject({ sort: 'runs', order: 'desc', limit: 100 });
+    const lag = Date.now() - Date.parse(`${plan({ kind: 'job' }).until.replace(' ', 'T')}Z`);
+    expect(lag).toBeGreaterThanOrEqual(5_000);
+    expect(lag).toBeLessThan(6_000);
     expect(plan({ kind: 'container' }).since < plan({ kind: 'http' }).until).toBe(true);
   });
 });
@@ -64,6 +79,8 @@ describe('the /stats query rules', () => {
     [{ kind: 'http', limit: '1001' }, 'limit: '],
     [{ kind: 'http', since: '2h', until: '3h' }, 'since: since must be before until'],
     [{ kind: 'http', since: 'yesterday' }, 'since: '],
+    [{ kind: 'http', since: '30d', bucket: '1m' }, 'bucket: at most 1500 steps'],
+    [{ kind: 'host', since: '6d', bucket: '5m' }, 'bucket: at most 1500 steps'],
   ])('refuses %o', (query, message) => {
     expect(messages(query).join(' | ')).toContain(message);
   });
@@ -72,6 +89,8 @@ describe('the /stats query rules', () => {
     expect(parse({ kind: 'error', by: 'type', sort: 'type' }).success).toBe(true);
     expect(parse({ kind: 'container', by: 'name', sort: 'name' }).success).toBe(true);
     expect(parse({ kind: 'host', bucket: '1h', sort: 'bucket' }).success).toBe(true);
+    expect(parse({ kind: 'http', since: '24h', bucket: '1m' }).success).toBe(true);
+    expect(parse({ kind: 'http', since: '30d', bucket: '1h' }).success).toBe(true);
   });
 });
 

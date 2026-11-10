@@ -55,7 +55,10 @@ through `logs__aggregate` and shows `truncated` in its caption.
   any other name is a 400 that lists the allowed ones), `order`, `limit` (100, at most 1000) and
   `cursor`. A group without a value sorts last. `meta.nextCursor` pins the window of page 1, so
   every page is cut from the same rows; a cursor sent with another kind, `by`, sort, order or filter
-  is a 400. Without `kind`, `/stats` answers the 0.2 form (`window`, `extension`).
+  is a 400. Page 1 ends 5 s before now (unless `until` is given), so a late row cannot move a group
+  between pages. A `bucket` draws at most 1500 steps, and a call groups at most 100000 groups (past
+  it, 503 busy). Without `kind`, `/stats` answers the 0.2 form (`window`, `extension`); `window`
+  with `kind` is a 400.
 
 | kind                                  | `/stats` measures, per group                                |
 | ------------------------------------- | ----------------------------------------------------------- |

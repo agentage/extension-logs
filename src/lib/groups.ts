@@ -1,5 +1,5 @@
 import { encodePage } from './cursor.js';
-import { Since, iso, stamp } from './filters.schema.js';
+import { Since, iso, pinnedEnd } from './filters.schema.js';
 import { filtersOf, keyOf, sortOf, type GroupsInput } from './groups.schema.js';
 import { groupsParams, groupsSql, type GroupPlan } from './groups.sql.js';
 import { KIND_DEFS } from './kinds.js';
@@ -16,7 +16,7 @@ const windowOf = ({ cursor, since, until, kind }: GroupsInput) =>
     ? { since: cursor.s, until: cursor.u, offset: cursor.o }
     : {
         since: Since.parse(since ?? KIND_DEFS[kind].since),
-        until: until ? Since.parse(until) : stamp(new Date()),
+        until: until ? Since.parse(until) : pinnedEnd(),
         offset: 0,
       };
 

@@ -954,7 +954,6 @@
             "in": "query",
             "required": false,
             "schema": {
-              "default": "1h",
               "type": "string",
               "enum": ["15m", "1h", "24h"]
             }
