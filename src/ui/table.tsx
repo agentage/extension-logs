@@ -13,7 +13,9 @@ export function useApi<T>(path: string): Load<T> {
     const set = (load: Load<T>) => live && setGot({ path, load });
     api(path).then(
       (data) => set({ state: 'ready', data: data as T }),
-      (error: Error) => set({ state: 'error', message: error.message })
+      // A host error has a code (401, 403, 503, timeout); a bare one is the network itself.
+      (error: Error & { code?: string }) =>
+        set({ state: 'error', message: error.code ? error.message : 'the network failed' })
     );
     return () => void (live = false);
   }, [api, path]);

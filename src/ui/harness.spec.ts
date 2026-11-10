@@ -72,7 +72,7 @@ const slowly = async (route: Route) => {
 const open = async (
   page: Page,
   widget: string,
-  mode: 'data' | 'empty' | 'error' | 'forbidden' | 'hang' = 'data',
+  mode: 'data' | 'empty' | 'error' | 'forbidden' | 'unauthorized' | 'offline' | 'hang' = 'data',
   slow = ''
 ) => {
   const seen: string[] = [];
@@ -80,6 +80,11 @@ const open = async (
     const url = new URL(route.request().url());
     seen.push(url.pathname + url.search);
     if (mode === 'hang') return;
+    if (mode === 'offline') return route.abort('internetdisconnected');
+    if (mode === 'unauthorized')
+      return route.fulfill(
+        json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Missing token' } }, 401)
+      );
     if (url.pathname + url.search === slow) return slowly(route);
     if (mode === 'forbidden')
       return route.fulfill(
@@ -113,6 +118,15 @@ for (const widget of ['events', 'hosts', 'services']) {
   test(`${widget}: a token without logs:admin is named in the alert`, async ({ page }) => {
     const { el } = await open(page, widget, 'forbidden');
     await expect(el.getByRole('alert')).toHaveText('Could not load: Needs logs:admin');
+  });
+  test(`${widget}: a 401 and a network error each have their own alert`, async ({
+    page,
+    context,
+  }) => {
+    const { el } = await open(page, widget, 'unauthorized');
+    await expect(el.getByRole('alert')).toHaveText('Could not load: Missing token');
+    const offline = await open(await context.newPage(), widget, 'offline');
+    await expect(offline.el.getByRole('alert')).toHaveText('Could not load: the network failed');
   });
   for (const colorScheme of ['light', 'dark'] as const)
     test(`${widget}: rows with the red rule, axe WCAG A/AA clean (${colorScheme})`, async ({
