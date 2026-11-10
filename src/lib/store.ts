@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { ClickHouseLogLevel, createClient } from '@clickhouse/client';
 import { fail, type Log } from '@agentage/extension';
 import { type Connection } from './connection.js';
-import { EVENTS_DDL, EVENTS_DEDUP } from './ddl.js';
+import { DEDUP_SETTING, EVENTS_DDL, EVENTS_DEDUP, SHOW_EVENTS } from './ddl.js';
 
 type Params = Record<string, unknown>;
 export type Row = Record<string, unknown>;
@@ -106,17 +106,21 @@ const unavailable = (log: Log) => (err: unknown) => {
 // One token per batch: a shipper retry of the same rows is dropped by the store.
 const tokenOf = (rows: object[]) => createHash('sha256').update(JSON.stringify(rows)).digest('hex');
 
+// The ALTER only when the table lacks the setting: a table set once needs no ALTER right again.
+const prepare = async (ch: Clickhouse) => {
+  await ch.command(EVENTS_DDL);
+  const [table] = await ch.query<{ statement?: string }>(SHOW_EVENTS);
+  if (!table?.statement?.includes(DEDUP_SETTING)) await ch.command(EVENTS_DEDUP);
+};
+
 // The DDL runs at start and, if the store was down then, again before the next use.
 export const createEventsStore = (ch: Clickhouse, log: Log): EventsStore => {
   let table: Promise<void> | undefined;
   const ddl = () =>
-    (table ??= ch
-      .command(EVENTS_DDL)
-      .then(() => ch.command(EVENTS_DEDUP))
-      .catch((err: unknown) => {
-        table = undefined;
-        throw err;
-      }));
+    (table ??= prepare(ch).catch((err: unknown) => {
+      table = undefined;
+      throw err;
+    }));
   const guard = <T>(work: () => Promise<T>): Promise<T> => ddl().then(work).catch(unavailable(log));
   return {
     ready: () => guard(async () => undefined),

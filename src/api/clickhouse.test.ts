@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { testStore } from '../lib/clickhouse.fixture.js';
+import { DEDUP_SETTING, SHOW_EVENTS } from '../lib/ddl.js';
 import { clickhouseCheck } from '../lib/store.js';
 import { OLDEST } from '../worker/retention.js';
 import { LINES } from './lines.fixture.js';
@@ -18,6 +19,11 @@ describe.runIf(store)('the events table on ClickHouse', () => {
     await store?.insert([...Object.values(LINES), raw].map(toRow) as object[]);
   });
   afterAll(() => db?.drop());
+
+  it('has the dedup setting where SHOW CREATE shows it, so a restart skips the ALTER', async () => {
+    const [table] = await store!.query<{ statement: string }>(SHOW_EVENTS);
+    expect(table?.statement).toContain(DEDUP_SETTING);
+  });
 
   it('answers checks.clickhouse ok', async () => {
     expect(await clickhouseCheck(db!.ch)()).toBe('ok');
@@ -63,6 +69,14 @@ describe.runIf(store)('the events table on ClickHouse', () => {
       "SELECT count() AS n FROM events WHERE startsWith(msg, 'load ')"
     );
     expect(row?.n).toBe(1000);
+  });
+
+  it('sends the read limits to the server: 20000 rows throw at max_result_rows as UNAVAILABLE busy', async () => {
+    await expect(store!.query('SELECT number FROM numbers(20000)')).rejects.toMatchObject({
+      code: 'UNAVAILABLE',
+      message: 'The store is busy: narrow the query or retry',
+    });
+    expect(await store!.query('SELECT number FROM numbers(10000)')).toHaveLength(10000);
   });
 
   it('answers a read over its limits as UNAVAILABLE busy, never a 500', async () => {

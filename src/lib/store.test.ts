@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'node:net';
 import { createTestContext } from '@agentage/extension';
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import { EVENTS_DDL, EVENTS_DEDUP } from './ddl.js';
+import { DEDUP_SETTING, EVENTS_DDL, EVENTS_DEDUP, SHOW_EVENTS } from './ddl.js';
 import { readConnection } from './connection.js';
 import {
   clickhouse,
@@ -29,11 +29,20 @@ describe('the events store', () => {
     const { ch, store } = fake();
     await Promise.all([store.ready(), store.insert([{ a: 1 }]), store.query('SELECT 1')]);
     expect(vi.mocked(ch.command).mock.calls).toEqual([[EVENTS_DDL], [EVENTS_DEDUP]]);
+    expect(ch.query).toHaveBeenCalledWith(SHOW_EVENTS);
     expect(ch.insert).toHaveBeenCalledWith(
       'events',
       [{ a: 1 }],
       expect.stringMatching(/^[0-f]{64}$/)
     );
+  });
+
+  it('skips the ALTER when the table already has the setting', async () => {
+    const { ch, store } = fake();
+    const statement = `CREATE TABLE logs.events (...) SETTINGS index_granularity = 8192, ${DEDUP_SETTING}`;
+    vi.mocked(ch.query).mockResolvedValueOnce([{ statement }]);
+    await store.ready();
+    expect(vi.mocked(ch.command).mock.calls).toEqual([[EVENTS_DDL]]);
   });
 
   it('gives the same batch the same token and another batch another', async () => {

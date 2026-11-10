@@ -28,12 +28,16 @@ store down, slow past 10 s, or at one of its limits) or 500 `INTERNAL`, never a 
 safe: ClickHouse 26.8 inserts async by default and keeps no dedup window on a non-replicated
 MergeTree, so the api sets `non_replicated_deduplication_window = 1000` on the table and sends
 each batch with a token (the sha256 of its rows); the same batch again stores nothing, even when
-the first attempt landed after its 503. Two identical batches sent on purpose count once.
+the first attempt landed after its 503. Two identical batches sent on purpose count once. The
+window counts inserts, not time: a retry more than 1000 inserts later is stored again. The api
+runs the `ALTER` only when `SHOW CREATE TABLE events` lacks the setting.
 
 Every read runs with `max_execution_time` 9 s, `max_memory_usage` 256 MB and `max_result_rows`
 10000 (throw, never a silent cut), so one wide query cannot take the 2 GB store; past a limit the
 read answers 503 `UNAVAILABLE` "The store is busy: narrow the query or retry". `/stats` returns
-the top 1000 groups by calls.
+at most 200 routes per part (so edge routes cannot crowd out a part's quiet ones) and 1000 rows
+in all, by calls; when it cut a row it says so: `meta.truncated: true` on `GET /stats`, a `note` on
+`logs__stats`, and the `services` widget (which reads `logs__stats`) shows that note in its caption.
 
 ## Scopes
 
