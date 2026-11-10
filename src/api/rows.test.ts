@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LINES } from './lines.fixture.js';
-import { redact, toRow } from './rows.js';
+import { toRow } from './rows.js';
 
 describe('a line to a row', () => {
   it.each([
@@ -72,7 +72,9 @@ describe('a line to a row', () => {
   });
 });
 
-describe('redaction', () => {
+describe('redaction (the package rules on every stored line)', () => {
+  const stored = (fields: object, msg = LINES.log.msg) => toRow({ ...LINES.log, msg, fields });
+
   it('hides secret keys, cuts strings at 200, caps depth at 3', () => {
     const fields = {
       'agentage.api_key': 'k',
@@ -82,7 +84,7 @@ describe('redaction', () => {
       a: { b: { c: { d: 1 } } },
       list: ['z'.repeat(201)],
     };
-    expect(redact(fields)).toEqual({
+    expect(stored(fields)?.fields).toEqual({
       'agentage.api_key': '[redacted]',
       Authorization: '[redacted]',
       'session.token': '[redacted]',
@@ -90,5 +92,17 @@ describe('redaction', () => {
       a: { b: { c: '[depth]' } },
       list: ['z'.repeat(200)],
     });
+  });
+
+  it('masks a credential in a value and in msg, under any key', () => {
+    const bearer = `Bearer ${'Ab1'.repeat(8)}`;
+    const row = stored({ 'http.request.header.x': `sent ${bearer}` }, `GET / with ${bearer}`);
+    expect(row?.fields).toEqual({ 'http.request.header.x': 'sent [redacted]' });
+    expect(row?.msg).toBe('GET / with [redacted]');
+  });
+
+  it('cuts on a code point: never half a surrogate pair', () => {
+    const msg = `${'x'.repeat(199)}\u{1F600}`;
+    expect(toRow({ ...LINES.log, msg })?.msg).toBe('x'.repeat(199));
   });
 });

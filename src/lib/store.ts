@@ -11,7 +11,7 @@ export type Row = Record<string, unknown>;
 export interface Clickhouse {
   command(sql: string): Promise<void>;
   insert(table: string, rows: object[], token: string): Promise<void>;
-  query<T = Row>(sql: string, params?: Params): Promise<T[]>;
+  query<T = Row>(sql: string, params?: Params, signal?: AbortSignal): Promise<T[]>;
   ping(): Promise<boolean>;
 }
 
@@ -55,8 +55,8 @@ export const clickhouse = (connection: Connection, timeoutMs = 10_000): Clickhou
     command: async (query) => void (await client.command({ query })),
     insert: async (table, values, token) =>
       void (await client.insert({ table, values, ...writes(token) })),
-    query: async <T = Row>(query: string, query_params?: Params) =>
-      (await client.query({ query, query_params, ...READS })).json<T>(),
+    query: async <T = Row>(query: string, query_params?: Params, abort_signal?: AbortSignal) =>
+      (await client.query({ query, query_params, ...READS, abort_signal })).json<T>(),
     ping: async () =>
       (await client.ping({ select: true, abort_signal: AbortSignal.timeout(PING_MS) })).success,
   };
@@ -76,7 +76,7 @@ export const lazy = (open: () => Clickhouse, log: Log): Clickhouse => {
   return {
     command: async (sql) => get().command(sql),
     insert: async (table, rows, token) => get().insert(table, rows, token),
-    query: async (sql, params) => get().query(sql, params),
+    query: async (...args) => get().query(...args),
     ping: async () => get().ping(),
   };
 };
@@ -85,23 +85,45 @@ export const lazy = (open: () => Clickhouse, log: Log): Clickhouse => {
 export const clickhouseCheck = (ch: Clickhouse) => async () =>
   (await ch.ping()) ? ('ok' as const) : ('unavailable' as const);
 
+const GIB = 1024 ** 3;
+// The disks of the events table's policy (default before the table exists); unreserved_space already
+// leaves out the estate's 1 GiB keep_free_space, so the disk's own free bytes are the two added.
+const FREE = `SELECT min(unreserved_space + keep_free_space) AS free FROM system.disks
+WHERE has((SELECT any(disks) FROM system.storage_policies WHERE policy_name = coalesce(nullIf((
+  SELECT any(storage_policy) FROM system.tables WHERE database = currentDatabase() AND name = 'events'
+), ''), 'default')), name)`;
+// Never unavailable: a full disk stops writes (503 on ingest) while reads still serve the operator.
+export const diskCheck = (ch: Clickhouse, log: Log) => async () => {
+  try {
+    const [row] = await ch.query<{ free: number }>(FREE, {}, AbortSignal.timeout(PING_MS));
+    return Number(row?.free) >= 1.5 * GIB ? ('ok' as const) : ('degraded' as const);
+  } catch (err) {
+    log.warn('checks.disk cannot read system.disks', { reason: messageOf(err) });
+    return 'degraded' as const;
+  }
+};
+
 const OUTAGE = /^(ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EHOSTUNREACH|EPIPE)$/;
-// ClickHouse's own limits: 159 timeout, 202 too many queries, 241 memory, 252 too many parts, 396 rows.
-const BUSY = /^(159|202|241|252|396)$/;
+// ClickHouse's own limits: 159 timeout, 202 too many queries, 241 and 173 memory, 252 parts, 396 rows.
+const BUSY = /^(159|202|241|173|252|396)$/;
+// It cannot write: 243 no space, 242 table read-only, 204 fsync, 294 and 75 write.
+const FULL = /^(243|242|204|294|75)$/;
 const codeOf = (err: unknown) => String((err as { code?: unknown } | null)?.code);
 const messageOf = (err: unknown) => (err instanceof Error ? err.message : String(err));
 export const isOutage = (err: unknown): boolean =>
   OUTAGE.test(codeOf(err)) || /timeout/i.test(messageOf(err));
 
 // A connection fault or a store limit is a 503 with a warning; any other error passes through.
-const unavailable = (log: Log) => (err: unknown) => {
-  const busy = BUSY.test(codeOf(err));
-  if (!busy && !isOutage(err)) throw err;
+const reasonOf = (err: unknown, write: boolean) => {
+  if (BUSY.test(codeOf(err))) return 'The store is busy: narrow the query or retry';
+  if (FULL.test(codeOf(err)) && write) return 'The store cannot write now: retry later';
+  return isOutage(err) || FULL.test(codeOf(err)) ? 'The store is unavailable' : undefined;
+};
+const unavailable = (log: Log, write: boolean) => (err: unknown) => {
+  const reason = reasonOf(err, write);
+  if (!reason) throw err;
   log.warn('store unavailable', { reason: messageOf(err) });
-  throw fail(
-    'UNAVAILABLE',
-    busy ? 'The store is busy: narrow the query or retry' : 'The store is unavailable'
-  );
+  throw fail('UNAVAILABLE', reason);
 };
 // One token per batch: a shipper retry of the same rows is dropped by the store.
 const tokenOf = (rows: object[]) => createHash('sha256').update(JSON.stringify(rows)).digest('hex');
@@ -121,10 +143,11 @@ export const createEventsStore = (ch: Clickhouse, log: Log): EventsStore => {
       table = undefined;
       throw err;
     }));
-  const guard = <T>(work: () => Promise<T>): Promise<T> => ddl().then(work).catch(unavailable(log));
+  const guard = <T>(work: () => Promise<T>, write = false): Promise<T> =>
+    ddl().then(work).catch(unavailable(log, write));
   return {
     ready: () => guard(async () => undefined),
-    insert: (rows) => guard(() => ch.insert('events', rows, tokenOf(rows))),
+    insert: (rows) => guard(() => ch.insert('events', rows, tokenOf(rows)), true),
     query: (sql, params) => guard(() => ch.query(sql, params)),
   };
 };

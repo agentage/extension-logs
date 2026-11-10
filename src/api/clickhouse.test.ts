@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { testStore } from '../lib/clickhouse.fixture.js';
 import { DEDUP_SETTING, SHOW_EVENTS } from '../lib/ddl.js';
-import { clickhouseCheck } from '../lib/store.js';
+import { createTestContext } from '@agentage/extension';
+import { clickhouseCheck, diskCheck } from '../lib/store.js';
 import { OLDEST } from '../worker/retention.js';
 import { LINES } from './lines.fixture.js';
 import { toRow } from './rows.js';
@@ -25,13 +26,20 @@ describe.runIf(store)('the events table on ClickHouse', () => {
     expect(table?.statement).toContain(DEDUP_SETTING);
   });
 
-  it('answers checks.clickhouse ok', async () => {
+  // The estate's store user is CLICKHOUSE_USER=logs, never default: the same entrypoint runs here (ci.yml, README).
+  it('runs as a non-default user: the DDL, the dedup ALTER, SHOW CREATE and system.disks', async () => {
+    const [who] = await db!.ch.query<{ user: string }>('SELECT currentUser() AS user');
+    expect(who?.user).not.toBe('default');
+    const ctx = createTestContext();
     expect(await clickhouseCheck(db!.ch)()).toBe('ok');
+    expect(await diskCheck(db!.ch, ctx.log)()).toBe('ok');
+    expect(ctx.logs).toEqual([]);
   });
 
   it('stores one row per line, with the time and the agcid as sent', async () => {
     const rows = await store!.query<{ kind: string; ts: string; agcid: string | null }>(
-      'SELECT kind, toString(ts) AS ts, agcid FROM events ORDER BY kind'
+      // The load test's rows are left out, so the order the tests run in does not matter.
+      "SELECT kind, toString(ts) AS ts, agcid FROM events WHERE NOT startsWith(msg, 'load ') ORDER BY kind"
     );
     expect(rows.map((row) => row.kind)).toEqual([
       'error',

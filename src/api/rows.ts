@@ -1,4 +1,4 @@
-import { EventSchema, type Event } from '@agentage/extension/logs';
+import { EventSchema, parseLine, type Event } from '@agentage/extension/logs';
 
 const DAY = 86_400_000;
 // Inside the TTL and at most an hour ahead: one row outside would fail its whole batch insert.
@@ -13,24 +13,7 @@ const LineSchema = EventSchema.refine(recent, 'ts outside the last 30 days').ref
   'sub is not usr_ or svc_'
 );
 
-const SECRET_KEY = /token|secret|password|key|authorization|cookie/i;
-const MAX_STRING = 200;
-const MAX_DEPTH = 3;
 const RAW_ERROR = /ERROR|FATAL/;
-
-// The package's redaction, applied again: secret keys hidden, strings cut, depth capped.
-export const redact = (value: unknown, depth = 1): unknown => {
-  if (typeof value === 'string') return value.slice(0, MAX_STRING);
-  if (typeof value !== 'object' || value === null) return value;
-  if (depth > MAX_DEPTH) return '[depth]';
-  if (Array.isArray(value)) return value.map((item) => redact(item, depth + 1));
-  return Object.fromEntries(
-    Object.entries(value).map(([key, item]) => [
-      key,
-      SECRET_KEY.test(key) ? '[redacted]' : redact(item, depth + 1),
-    ])
-  );
-};
 
 // A raw line (a container the kit does not run): a log row, no agcid, level from its text.
 const raw = (event: Event): Event =>
@@ -70,7 +53,7 @@ export type Row = Event & ReturnType<typeof promote>;
 export const toRow = (line: unknown): Row | null => {
   const parsed = LineSchema.safeParse(line);
   if (!parsed.success) return null;
-  const fields = redact(parsed.data.fields) as Event['fields'];
-  const event = raw({ ...parsed.data, msg: parsed.data.msg.slice(0, MAX_STRING), fields });
+  // The package's redaction on a valid line: secret keys and credential values masked, cut on a code point.
+  const event = raw(parseLine(JSON.stringify(parsed.data)));
   return { ...event, host: event.host ?? '', client: event.client ?? '', ...promote(event) } as Row;
 };

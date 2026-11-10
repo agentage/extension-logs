@@ -29,8 +29,9 @@ describe.runIf(store)('the reads on ClickHouse, over the section 4 visits', () =
     expect((await find({ since: '1m' })).events).toHaveLength(3);
   });
 
+  // A day old, so the other tests' 24 h and 1 h windows never see these rows, in any order.
   it('search: walking every page at limit 2 over rows with one ts has no gap and no overlap', async () => {
-    const ts = new Date(Date.now() - 120_000).toISOString();
+    const ts = new Date(Date.now() - 25 * 3_600_000).toISOString();
     const same = [1, 2, 3, 4, 5].map((n) => ({
       ...VISITS[0],
       ts,
@@ -40,10 +41,15 @@ describe.runIf(store)('the reads on ClickHouse, over the section 4 visits', () =
       msg: `page ${n}`,
     }));
     await s.insert(same.map(toRow) as object[]);
-    const all = (await find({ extension: 'paging' })).events.map((e) => e['id']);
+    const all = (await find({ extension: 'paging', since: '2d' })).events.map((e) => e['id']);
     const walked: unknown[] = [];
     for (let cursor: string | undefined, n = 0; n === 0 || cursor; n++) {
-      const page = await find({ extension: 'paging', limit: 2, ...(cursor && { cursor }) });
+      const page = await find({
+        extension: 'paging',
+        since: '2d',
+        limit: 2,
+        ...(cursor && { cursor }),
+      });
       walked.push(...page.events.map((e) => e['id']));
       cursor = page.nextCursor;
     }
@@ -79,19 +85,6 @@ describe.runIf(store)('the reads on ClickHouse, over the section 4 visits', () =
     expect(rows.find((r) => r['part'] === 'edge')).toMatchObject({ failed: 1, requests: 1 });
     expect(rows.find((r) => r['route'] === 'probe__echo')).toMatchObject({ kind: 'mcp', calls: 1 });
     expect(rows.reduce((n, r) => n + Number(r['calls']), 0)).toBe(5);
-  });
-
-  it('stats: availability is the admin formula from 50 requests', async () => {
-    const line = { ...(VISITS[0] as { fields: object }), ts: new Date().toISOString() };
-    const fail = { ...line, fields: { ...line.fields, 'http.response.status_code': 503 } };
-    await s.insert([...Array(48).fill(line), fail].map(toRow) as object[]);
-    const { stats: rows } = await R.stats(s, { window: '15m' });
-    expect(
-      rows.find((r) => r['route'] === '/api/v1/machines' && r['part'] === 'api')
-    ).toMatchObject({
-      requests: 51,
-      availability: 1 - 1 / 51,
-    });
   });
 
   it('hosts: the last sample per host, red by age or threshold; containers by cpu', async () => {

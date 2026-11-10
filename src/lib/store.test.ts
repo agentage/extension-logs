@@ -7,6 +7,7 @@ import {
   clickhouse,
   clickhouseCheck,
   createEventsStore,
+  diskCheck,
   isOutage,
   lazy,
   type Clickhouse,
@@ -55,7 +56,7 @@ describe('the events store', () => {
     expect(tokens[2]).not.toBe(tokens[0]);
   });
 
-  it.each(['159', '202', '241', '252', '396'])(
+  it.each(['159', '202', '241', '173', '252', '396'])(
     'answers a store limit (code %s) as UNAVAILABLE busy, never a 500',
     async (code) => {
       const { ch, store } = fake();
@@ -63,6 +64,24 @@ describe('the events store', () => {
       await expect(store.query('SELECT 1')).rejects.toMatchObject({
         code: 'UNAVAILABLE',
         message: 'The store is busy: narrow the query or retry',
+      });
+    }
+  );
+
+  it.each(['243', '242', '204', '294', '75'])(
+    'answers a store that cannot write (code %s) as UNAVAILABLE, never a 500; a read never says write',
+    async (code) => {
+      const { ch, store } = fake();
+      const err = Object.assign(new Error(`Code: ${code}`), { code });
+      vi.mocked(ch.insert).mockRejectedValueOnce(err);
+      vi.mocked(ch.query).mockResolvedValueOnce([]).mockRejectedValueOnce(err);
+      await expect(store.insert([{ a: 1 }])).rejects.toMatchObject({
+        code: 'UNAVAILABLE',
+        message: 'The store cannot write now: retry later',
+      });
+      await expect(store.query('SELECT 1')).rejects.toMatchObject({
+        code: 'UNAVAILABLE',
+        message: 'The store is unavailable',
       });
     }
   );
@@ -88,6 +107,40 @@ describe('the events store', () => {
     [null, false],
   ])('tells an outage from a fault (%#)', (err, outage) => {
     expect(isOutage(err)).toBe(outage);
+  });
+});
+
+describe('checks.disk', () => {
+  const GIB = 1024 ** 3;
+  it.each([
+    [[{ free: 2 * GIB }], 'ok'],
+    [[{ free: 1.5 * GIB }], 'ok'],
+    [[{ free: 1.5 * GIB - 1 }], 'degraded'],
+    [[{ free: 0 }], 'degraded'],
+    [[], 'degraded'],
+  ])(
+    'reads the free bytes of the table disks %j as %s, never unavailable',
+    async (rows, status) => {
+      const { ch } = fake();
+      vi.mocked(ch.query).mockResolvedValueOnce(rows);
+      expect(await diskCheck(ch, createTestContext().log)()).toBe(status);
+      expect(ch.query).toHaveBeenCalledWith(
+        expect.stringContaining('system.storage_policies'),
+        {},
+        expect.any(AbortSignal)
+      );
+    }
+  );
+
+  it('reads degraded with the reason logged when system.disks is refused', async () => {
+    const ctx = createTestContext();
+    const { ch } = fake();
+    const denied = Object.assign(new Error('Not enough privileges'), { code: '497' });
+    vi.mocked(ch.query).mockRejectedValueOnce(denied);
+    expect(await diskCheck(ch, ctx.log)()).toBe('degraded');
+    expect(ctx.logs).toContainEqual(
+      expect.objectContaining({ level: 'warn', message: 'checks.disk cannot read system.disks' })
+    );
   });
 });
 
@@ -143,6 +196,15 @@ describe('the client against a store that never answers or is not there', () => 
     await expect(store.insert([{ a: 1 }])).rejects.toMatchObject({ code: 'UNAVAILABLE' });
     expect(Date.now() - started).toBeLessThan(2_000);
     await expect(clickhouseCheck(clickhouse(at(port()), 300))()).resolves.toBe('unavailable');
+  });
+
+  it('bounds both /health checks under the kit 1 s bound, whatever the client timeout', async () => {
+    const ch = clickhouse(at(port()));
+    const started = Date.now();
+    const log = createTestContext().log;
+    const checks = await Promise.all([clickhouseCheck(ch)(), diskCheck(ch, log)()]);
+    expect(Date.now() - started).toBeLessThan(1_500);
+    expect(checks).toEqual(['unavailable', 'degraded']);
   });
 
   it('answers UNAVAILABLE at once on a closed port', async () => {
