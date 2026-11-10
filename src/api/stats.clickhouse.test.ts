@@ -44,7 +44,7 @@ describe.runIf(db)('the stats formula on ClickHouse', () => {
   afterAll(() => db?.drop());
 
   it('a 429 leaves requests; service and test traffic are left out', async () => {
-    const rows = await R.stats(db!.store, { window: '15m', extension: 'formula' });
+    const { stats: rows } = await R.stats(db!.store, { window: '15m', extension: 'formula' });
     expect(rows.find((r) => r['route'] === '/a')).toMatchObject({
       calls: 2,
       requests: 1,
@@ -54,12 +54,33 @@ describe.runIf(db)('the stats formula on ClickHouse', () => {
   });
 
   it('a failed tool call counts as failed, an ok one as a request', async () => {
-    const rows = await R.stats(db!.store, { window: '15m', extension: 'formula' });
+    const { stats: rows } = await R.stats(db!.store, { window: '15m', extension: 'formula' });
     expect(rows.find((r) => r['kind'] === 'mcp')).toMatchObject({
       route: 'formula__t',
       calls: 2,
       requests: 2,
       failed: 1,
     });
+  });
+
+  it('caps edge routes at 200 per part, keeps the quiet routes of a part, says truncated', async () => {
+    const crowd = (part: string, route: string) => ({
+      ...line(route, 200),
+      extension: 'crowd',
+      part,
+    });
+    const edge = Array.from({ length: 205 }, (_, i) => [
+      crowd('edge', `/e${i}`),
+      crowd('edge', `/e${i}`),
+    ]);
+    const quiet = ['/q1', '/q2', '/q3'].map((route) => crowd('api', route));
+    await db!.store.insert([...edge.flat(), ...quiet].map(toRow) as object[]);
+    const { stats, truncated } = await R.stats(db!.store, { window: '15m', extension: 'crowd' });
+    expect(truncated).toBe(true);
+    expect(stats.filter((r) => r['part'] === 'edge')).toHaveLength(200);
+    expect(stats.filter((r) => r['part'] === 'api')).toHaveLength(3);
+    expect((await R.stats(db!.store, { window: '15m', extension: 'formula' })).truncated).toBe(
+      false
+    );
   });
 });

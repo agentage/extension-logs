@@ -145,6 +145,33 @@ describe('the read routes', () => {
     expect(text).not.toMatch(/SELECT|logs_store|pw@|at .*\.js/);
   });
 
+  it.each([
+    [
+      '201 routes of one part',
+      Array.from({ length: 201 }, (_, i) => ({ part: 'edge', route: `/${i}` })),
+      200,
+    ],
+    ['1001 parts', Array.from({ length: 1001 }, (_, i) => ({ part: `p${i}`, route: '/' })), 1000],
+  ])('caps /stats at %s and sets meta.truncated', async (_, rows, kept) => {
+    const stat = { extension: 'x', kind: 'http', method: 'GET', calls: 1, errors: 0, failed: 0 };
+    const full = rows.map((r) => ({
+      ...stat,
+      ...r,
+      requests: 1,
+      users: 0,
+      availability: null,
+      q: [1, 2, 3],
+    }));
+    query.mockResolvedValueOnce(full);
+    const body = (await (await get('/stats', as('logs:admin'))).json()) as Body;
+    expect(body.data).toHaveLength(kept);
+    expect(body.meta).toEqual({ truncated: true });
+    query.mockResolvedValueOnce(full.slice(0, 3));
+    expect(((await (await get('/stats', as('logs:admin'))).json()) as Body).meta).toEqual({
+      truncated: false,
+    });
+  });
+
   it('traces a known agcid: hops, ms, ok', async () => {
     query.mockResolvedValueOnce([row, { ...row, kind: 'span', ts: '2026-11-10 09:12:03.450' }]);
     const body = (await (await get(`/traces/${A}`, as('logs:admin'))).json()) as Body;

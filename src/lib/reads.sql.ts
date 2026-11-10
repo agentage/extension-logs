@@ -24,7 +24,11 @@ ORDER BY ts DESC, id DESC LIMIT {limit:UInt32}`;
 export const TRACE = `SELECT ${COLUMNS} FROM events WHERE agcid = {agcid:FixedString(32)}
 ORDER BY ts, id LIMIT 1000`;
 
-// The admin console's reliability formula; availability needs 50 requests, else null; edge routes can be many, so the top 1000.
+// The admin console's reliability formula; availability needs 50 requests, else null.
+// One row past each cap (per part, in all) tells the caller it was cut.
+// Edge routes are many: the per-part cap keeps them from crowding out the quiet routes of a part.
+export const STATS_PER_PART = 200;
+export const STATS_MAX = 1000;
 export const STATS = (where: string) => `SELECT extension, part, kind, method, route,
   count() AS calls, countIf(level = 'error') AS errors,
   countIf((kind = 'http' AND part != 'edge' AND status >= 500) OR (kind = 'mcp' AND NOT ok)
@@ -35,7 +39,8 @@ export const STATS = (where: string) => `SELECT extension, part, kind, method, r
   quantiles(0.5, 0.95, 0.99)(ms) AS q, uniqExact(sub) AS users
 FROM events
 WHERE kind IN ('http', 'mcp') AND ts >= {since:DateTime64(3, 'UTC')} AND user_type NOT IN ('test', 'service')${where}
-GROUP BY extension, part, kind, method, route ORDER BY calls DESC LIMIT 1000`;
+GROUP BY extension, part, kind, method, route ORDER BY calls DESC
+LIMIT ${STATS_PER_PART + 1} BY extension, part LIMIT ${STATS_MAX + 1}`;
 
 export const HOSTS = `SELECT host,
   argMax(${num('host.cpu_pct')}, ts) AS cpu, avg(${num('host.cpu_pct')}) AS cpu1h,

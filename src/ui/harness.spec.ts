@@ -69,14 +69,23 @@ const slowly = async (route: Route) => {
   await route.fulfill(json({ success: true, data: [1, 2, 3].map((i) => event(i, 'info')) }));
 };
 
-const open = async (
-  page: Page,
-  widget: string,
-  mode: 'data' | 'empty' | 'error' | 'forbidden' | 'unauthorized' | 'offline' | 'hang' = 'data',
-  slow = ''
-) => {
+type Mode = 'data' | 'empty' | 'error' | 'forbidden' | 'unauthorized' | 'offline' | 'hang';
+const NOTE = 'truncated: more than 200 routes in a part or 1000 in all; narrow by extension';
+
+// The services widget calls logs__stats over /mcp: the same data as a JSON-RPC result.
+const rpc = (route: Route, mode: Mode | 'truncated') => {
+  const { id } = route.request().postDataJSON() as { id: number };
+  const stats = mode === 'empty' ? [] : DATA['stats'];
+  const result = {
+    content: [],
+    structuredContent: { stats, ...(mode === 'truncated' && { note: NOTE }) },
+  };
+  return route.fulfill(json({ jsonrpc: '2.0', id, result }));
+};
+
+const open = async (page: Page, widget: string, mode: Mode | 'truncated' = 'data', slow = '') => {
   const seen: string[] = [];
-  await page.route('**/api/v1/**', (route) => {
+  await page.route(/\/(api\/v1\/.*|mcp)$/, (route) => {
     const url = new URL(route.request().url());
     seen.push(url.pathname + url.search);
     if (mode === 'hang') return;
@@ -94,6 +103,7 @@ const open = async (
       return route.fulfill(
         json({ success: false, error: { code: 'UNAVAILABLE', message: 'store down' } }, 503)
       );
+    if (url.pathname.endsWith('/mcp')) return rpc(route, mode);
     return route.fulfill(
       json({ success: true, data: mode === 'empty' ? [] : answer(url.pathname) })
     );
@@ -181,6 +191,13 @@ test('hosts: a host opens its containers, axe clean there', async ({ page }) => 
   await expect(el).toContainText('logs_api12.5%100 MB512 MB');
   expect(seen.at(-1)).toBe('/api/v1/hosts/next-2/containers');
   await axe(page);
+});
+
+test('services: a cut /stats says so in the caption', async ({ page, context }) => {
+  const { el } = await open(page, 'services', 'truncated');
+  await expect(el.locator('caption')).toHaveText(`services, 24 h, ${NOTE}`);
+  const full = await open(await context.newPage(), 'services');
+  await expect(full.el.locator('caption')).toHaveText('services, 24 h');
 });
 
 test('services: the reason, availability and the worst route p95', async ({ page }) => {

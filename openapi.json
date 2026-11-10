@@ -707,7 +707,7 @@
     },
     "/api/v1/stats": {
       "get": {
-        "summary": "Calls, errors, availability, latency: the top 1000 groups by calls",
+        "summary": "Calls, errors, availability, latency: 200 routes per part, 1000 in all, meta.truncated when cut",
         "security": [
           {
             "pat": ["logs:admin"]

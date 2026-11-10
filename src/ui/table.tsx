@@ -4,22 +4,32 @@ import { useHost } from '@agentage/widget';
 export type Load<T> =
   { state: 'loading' } | { state: 'error'; message: string } | { state: 'ready'; data: T };
 
-// One GET per path; an answer for an older path reads as loading, never as this path's data.
-export function useApi<T>(path: string): Load<T> {
-  const { api } = useHost();
+// One call per key; an answer for an older key reads as loading, never as this key's data.
+function useLoad<T>(path: string, call: () => Promise<unknown>): Load<T> {
   const [got, setGot] = useState<{ path: string; load: Load<T> }>();
   useEffect(() => {
     let live = true;
     const set = (load: Load<T>) => live && setGot({ path, load });
-    api(path).then(
+    call().then(
       (data) => set({ state: 'ready', data: data as T }),
       // A host error has a code (401, 403, 503, timeout); a bare one is the network itself.
       (error: Error & { code?: string }) =>
         set({ state: 'error', message: error.code ? error.message : 'the network failed' })
     );
     return () => void (live = false);
-  }, [api, path]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the key names the call
+  }, [path]);
   return got?.path === path ? got.load : { state: 'loading' };
+}
+
+export function useApi<T>(path: string): Load<T> {
+  const { api } = useHost();
+  return useLoad<T>(path, () => api(path));
+}
+
+export function useTool<T>(name: string, args: Record<string, string>): Load<T> {
+  const { tool } = useHost();
+  return useLoad<T>(`${name} ${JSON.stringify(args)}`, () => tool(name, args));
 }
 
 export const mapLoad = <T, U>(load: Load<T>, fn: (data: T) => U): Load<U> =>

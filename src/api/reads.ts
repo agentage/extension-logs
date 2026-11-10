@@ -38,11 +38,15 @@ const READS = [
   },
   {
     path: '/stats',
-    summary: 'Calls, errors, availability, latency: the top 1000 groups by calls',
+    summary:
+      'Calls, errors, availability, latency: 200 routes per part, 1000 in all, meta.truncated when cut',
     scope: 'admin',
     input: R.StatsSchema,
     output: z.array(O.StatOutSchema),
-    run: (s: EventsStore, r: Req) => R.stats(s, r.input),
+    run: async (s: EventsStore, r: Req) => {
+      const { stats, truncated } = await R.stats(s, r.input);
+      return reply(stats, { meta: { truncated } });
+    },
   },
   {
     path: '/hosts',

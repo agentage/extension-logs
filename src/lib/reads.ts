@@ -45,6 +45,8 @@ export const SearchSchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 export type Search = z.output<typeof SearchSchema>;
+export const TRUNCATED =
+  'truncated: more than 200 routes in a part or 1000 in all; narrow by extension';
 // The route's query: an empty window is a mistake, not an empty page.
 export const SearchQuery = SearchSchema.refine(
   ({ since, until }) => until === undefined || since < until,
@@ -87,13 +89,28 @@ export const trace = async (store: EventsStore, agcid: string) => {
 const onExtension = (extension?: string) =>
   extension ? ' AND extension = {extension:String}' : '';
 
+// At most 200 rows per part and 1000 in all; truncated says a row was left out.
+const capped = (rows: Row[]) => {
+  const seen = new Map<string, number>();
+  const kept = rows.filter((row) => {
+    const key = `${String(row['extension'])}/${String(row['part'])}`;
+    seen.set(key, (seen.get(key) ?? 0) + 1);
+    return (seen.get(key) ?? 0) <= SQL.STATS_PER_PART;
+  });
+  return {
+    kept: kept.slice(0, SQL.STATS_MAX),
+    truncated: kept.length < rows.length || kept.length > SQL.STATS_MAX,
+  };
+};
+
 export const stats = async (store: EventsStore, { window, extension }: Stats) => {
   const params = { since: Since.parse(window), extension };
-  const rows = await store.query(SQL.STATS(onExtension(extension)), params);
-  return rows.map(({ q, ...row }): Row => {
+  const { kept, truncated } = capped(await store.query(SQL.STATS(onExtension(extension)), params));
+  const rows = kept.map(({ q, ...row }): Row => {
     const [p50 = 0, p95 = 0, p99 = 0] = q as number[];
     return { ...row, p50, p95, p99 };
   });
+  return { stats: rows, truncated };
 };
 
 export const hosts = async (store: EventsStore) =>

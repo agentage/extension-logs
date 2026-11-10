@@ -420,7 +420,7 @@
       }
     },
     {
-      "description": "Per extension, part, route and tool: calls, errors, availability, p50, p95, p99, users.",
+      "description": "Per extension, part, route and tool: calls, errors, availability, p50, p95, p99, users; at most 200 routes per part and 1000 in all, with a note when cut.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
@@ -442,6 +442,9 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
+          "note": {
+            "type": "string"
+          },
           "stats": {
             "items": {
               "additionalProperties": false,

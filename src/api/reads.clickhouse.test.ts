@@ -65,7 +65,7 @@ describe.runIf(store)('the reads on ClickHouse, over the section 4 visits', () =
   });
 
   it('stats: a row per route and tool, test traffic out, availability null under 50 requests', async () => {
-    const rows = await R.stats(s, { window: '1h' });
+    const { stats: rows } = await R.stats(s, { window: '1h' });
     const machines = rows.find((r) => r['part'] === 'api' && r['route'] === '/api/v1/machines');
     expect(machines).toMatchObject({
       extension: 'platform',
@@ -85,7 +85,7 @@ describe.runIf(store)('the reads on ClickHouse, over the section 4 visits', () =
     const line = { ...(VISITS[0] as { fields: object }), ts: new Date().toISOString() };
     const fail = { ...line, fields: { ...line.fields, 'http.response.status_code': 503 } };
     await s.insert([...Array(48).fill(line), fail].map(toRow) as object[]);
-    const rows = await R.stats(s, { window: '15m' });
+    const { stats: rows } = await R.stats(s, { window: '15m' });
     expect(
       rows.find((r) => r['route'] === '/api/v1/machines' && r['part'] === 'api')
     ).toMatchObject({
