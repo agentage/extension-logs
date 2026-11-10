@@ -13,9 +13,9 @@ const num = (value: number | null) => (value === null ? '-' : String(value));
 const BOX_COLS = { name: 0, cpu: 6, mem: 7, limit: 7 };
 const COLS = { host: 0, cpu: 4, mem: 4, disk: 4, load1: 5, containers: 10, at: 8 };
 // The windows of 0.2: a host sampled in the last hour, a container in the last 5 minutes.
-const HOSTS = '/stats?kind=host&by=host&since=1h&sort=host&order=asc';
+const HOSTS = '/stats?kind=host&by=host&since=1h&sort=host&order=asc&limit=1000';
 const boxes = (host: string) =>
-  `/stats?kind=container&host=${encodeURIComponent(host)}&by=name&since=5m`;
+  `/stats?kind=container&host=${encodeURIComponent(host)}&by=name&since=5m&limit=1000`;
 
 const containerRow = (c: Container): Row => ({
   key: c.name,

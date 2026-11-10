@@ -187,7 +187,7 @@ test('hosts: a host opens its containers, axe clean there', async ({ page }) => 
   await el.getByRole('button', { name: 'containers of next-2' }).click();
   await expect(el.getByRole('heading')).toBeFocused();
   await expect(el).toContainText('logs_api12.5%100 MB512 MB');
-  expect(seen.at(-1)).toBe('/api/v1/stats?kind=container&host=next-2&by=name&since=5m');
+  expect(seen.at(-1)).toBe('/api/v1/stats?kind=container&host=next-2&by=name&since=5m&limit=1000');
   await axe(page);
 });
 
