@@ -8,7 +8,7 @@ type Event = z.output<typeof O.EventOutSchema>;
 type Trace = z.output<typeof O.TraceOutSchema>;
 type Filter = { q: string; level: string; extension: string };
 const LEVELS = ['', 'info', 'warn', 'error'];
-const COLS = { ts: 8, level: 5, 'extension/part': 13, kind: 5, msg: 0, agcid: 12 };
+const COLS = { ts: 8, level: 5, 'extension/part': 14, kind: 5, msg: 0, agcid: 12 };
 
 const agcidCell = (agcid: string | null, open?: (agcid: string) => void) =>
   agcid && open ? <Link label={`trace ${agcid}`} text={agcid} go={() => open(agcid)} /> : agcid;
@@ -34,7 +34,7 @@ function TraceList({ agcid, back }: { agcid: string; back: () => void }) {
   return (
     <>
       <Back back={back} text={`agcid ${agcid}${head}`} />
-      <Table caption="trace" cols={COLS} min="720px" load={rows} />
+      <Table caption="trace" cols={COLS} rest={32} load={rows} />
     </>
   );
 }
@@ -107,7 +107,7 @@ export function Events() {
   return (
     <>
       <Filters filter={filter} set={setFilter} />
-      <Table caption="events, last 100" cols={COLS} min="720px" load={rows} />
+      <Table caption="events, last 100" cols={COLS} rest={32} load={rows} />
     </>
   );
 }
