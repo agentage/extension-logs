@@ -1,6 +1,6 @@
 {
   "name": "@agentage/extension-logs",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "private": true,
   "description": "The logs extension: one events table in ClickHouse, the ingest, rows and groups reads beside the 0.2 routes, seven MCP tools and three widgets",
   "type": "module",
