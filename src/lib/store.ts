@@ -48,7 +48,7 @@ export const clickhouse = (connection: Connection): Clickhouse => {
   };
 };
 
-// Opened on first use: the kit's tool runs create(ctx) to read routes and tools, nothing mounted.
+// Opened on first use (the kit's tool runs create(ctx) with nothing mounted); no connection is a 503.
 export const lazy = (open: () => Clickhouse, log: Log): Clickhouse => {
   let ch: Clickhouse | undefined;
   const get = () => {
@@ -56,7 +56,7 @@ export const lazy = (open: () => Clickhouse, log: Log): Clickhouse => {
       return (ch ??= open());
     } catch (err) {
       log.error(err);
-      throw err;
+      throw fail('UNAVAILABLE', 'The store is unavailable');
     }
   };
   return {

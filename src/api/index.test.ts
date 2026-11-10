@@ -2,24 +2,44 @@ import { createTestContext, startTestServer } from '@agentage/extension';
 import { describe, expect, it, vi } from 'vitest';
 
 const down = { url: 'http://127.0.0.1:1', username: 'logs', password: 'x', database: 'logs' };
-vi.mock('../lib/connection.js', () => ({ readConnection: () => down }));
+const connection = vi.hoisted(() => ({ read: (): unknown => undefined }));
+vi.mock('../lib/connection.js', () => ({ readConnection: () => connection.read() }));
 const { create } = await import('./index.js');
 const { LINES } = await import('./lines.fixture.js');
 
+const post = { method: 'POST', headers: { 'content-type': 'application/json' } };
+const statuses = async (sub: string, scope: string) => {
+  const server = await startTestServer({
+    create,
+    ctx: createTestContext(),
+    caller: { sub, scopes: [scope] },
+  });
+  const ingest = await server.fetch('/api/v1/events', {
+    ...post,
+    body: JSON.stringify([LINES.log]),
+  });
+  const read = await server.fetch('/api/v1/events');
+  await server.close();
+  return [ingest.status, read.status];
+};
+
 describe('the api part', () => {
-  it('starts while the store is down and answers 503 to an ingest until it is back', async () => {
-    const caller = { sub: 'svc_shipper', scopes: ['logs:write'] };
-    const server = await startTestServer({ create, ctx: createTestContext(), caller });
-    const init = { method: 'POST', headers: { 'content-type': 'application/json' } };
-    const res = await server.fetch('/api/v1/events', {
-      ...init,
-      body: JSON.stringify([LINES.log]),
-    });
-    await server.close();
-    expect(res.status).toBe(503);
+  it('starts while the store is down and answers 503 until it is back', async () => {
+    connection.read = () => down;
+    expect((await statuses('svc_shipper', 'logs:write'))[0]).toBe(503);
+    expect((await statuses('usr_admin', 'logs:admin'))[1]).toBe(503);
+  });
+
+  it('answers 503 on ingest and reads while store-url is missing', async () => {
+    connection.read = () => {
+      throw new Error('/run/secrets/store-url has no value: the store is not mounted');
+    };
+    expect((await statuses('svc_shipper', 'logs:write'))[0]).toBe(503);
+    expect((await statuses('usr_admin', 'logs:admin'))[1]).toBe(503);
   });
 
   it('adds checks.clickhouse to /health: unavailable while the store is down', async () => {
+    connection.read = () => down;
     const ctx = createTestContext();
     create(ctx);
     expect(await ctx.checks['clickhouse']?.()).toBe('unavailable');
