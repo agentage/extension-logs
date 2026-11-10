@@ -41,6 +41,8 @@ const reads = (timeoutMs: number) =>
       max_memory_usage: '268435456',
       max_result_rows: '10000',
       result_overflow_mode: 'throw',
+      max_rows_to_group_by: '100000',
+      group_by_overflow_mode: 'throw',
     },
   }) as const;
 // Under the kit's 1 s health bound, so a hung store never stacks probes.
@@ -104,8 +106,8 @@ export const diskCheck = (ch: Clickhouse, log: Log) => async () => {
 };
 
 const OUTAGE = /^(ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EHOSTUNREACH|EPIPE)$/;
-// ClickHouse's own limits: 159 timeout, 202 too many queries, 241 and 173 memory, 252 parts, 396 rows.
-const BUSY = /^(159|202|241|173|252|396)$/;
+// ClickHouse's own limits: 159 timeout, 202 queries, 241 and 173 memory, 252 parts, 396 and 158 rows.
+const BUSY = /^(159|202|241|173|252|396|158)$/;
 // It cannot write: 243 no space, 242 table read-only, 204 fsync, 294 and 75 write.
 const FULL = /^(243|242|204|294|75)$/;
 const codeOf = (err: unknown) => String((err as { code?: unknown } | null)?.code);
