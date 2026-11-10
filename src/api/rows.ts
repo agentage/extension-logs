@@ -51,7 +51,7 @@ const okOf = (event: Event, status: number): boolean => {
 };
 
 // The hot columns, read from fields; the ingest derives nothing else.
-export const promote = (event: Event) => {
+const promote = (event: Event) => {
   const f = event.fields;
   const status = count(f['http.response.status_code'], 65_535);
   const route = event.kind === 'mcp' ? f['gen_ai.tool.name'] : f['http.route'];

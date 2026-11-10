@@ -97,6 +97,10 @@ const open = async (
   return { el: page.locator(`logs-${widget}`), seen };
 };
 
+const axe = async (page: Page) => {
+  const { violations } = await new AxeBuilder({ page }).withTags(WCAG).analyze();
+  expect(violations.map((violation) => violation.id)).toEqual([]);
+};
 for (const widget of ['events', 'hosts', 'services']) {
   test(`${widget}: loading, empty and error states`, async ({ page, context }) => {
     await expect((await open(page, widget, 'hang')).el).toContainText('Loading...');
@@ -104,10 +108,7 @@ for (const widget of ['events', 'hosts', 'services']) {
     await expect(empty.el).toContainText('No rows');
     const failed = await open(await context.newPage(), widget, 'error');
     await expect(failed.el.getByRole('alert')).toHaveText('Could not load: store down');
-    const { violations } = await new AxeBuilder({ page: failed.el.page() })
-      .withTags(WCAG)
-      .analyze();
-    expect(violations.map((violation) => violation.id)).toEqual([]);
+    await axe(failed.el.page());
   });
   test(`${widget}: a token without logs:admin is named in the alert`, async ({ page }) => {
     const { el } = await open(page, widget, 'forbidden');
@@ -120,15 +121,9 @@ for (const widget of ['events', 'hosts', 'services']) {
       await page.emulateMedia({ colorScheme });
       const { el } = await open(page, widget);
       await expect(el.locator('tr.red')).toHaveCount(1);
-      const { violations } = await new AxeBuilder({ page }).withTags(WCAG).analyze();
-      expect(violations.map((violation) => violation.id)).toEqual([]);
+      await axe(page);
     });
 }
-
-const axe = async (page: Page) => {
-  const { violations } = await new AxeBuilder({ page }).withTags(WCAG).analyze();
-  expect(violations.map((violation) => violation.id)).toEqual([]);
-};
 
 test('events: filters narrow the query, an agcid opens its trace list', async ({ page }) => {
   const { el, seen } = await open(page, 'events');

@@ -10,7 +10,7 @@ const iso = (ts: unknown) => `${String(ts).replace(' ', 'T')}Z`;
 const back = (s: string) => Number(s.slice(0, -1)) * UNIT[s.at(-1) as keyof typeof UNIT];
 
 // 15m, 2h, 7d back from now, or an ISO time; ClickHouse reads it as DateTime64(3, 'UTC').
-export const Since = z.union([
+const Since = z.union([
   z
     .string()
     .regex(/^\d{1,4}[mhd]$/)
@@ -30,7 +30,7 @@ const Cursor = z
   .max(200)
   .transform(decode)
   .pipe(z.tuple([z.string().regex(STAMP), z.uuid()]));
-export const cursorOf = (row: Row) =>
+const cursorOf = (row: Row) =>
   Buffer.from(JSON.stringify([row['ts'], row['id']])).toString('base64url');
 
 const name = z.string().min(1).max(64);
@@ -48,8 +48,10 @@ export const StatsSchema = z.object({
   extension: name.optional(),
 });
 export const ErrorsSchema = z.object({ since: Since.prefault('24h'), extension: name.optional() });
+type Stats = z.output<typeof StatsSchema>;
+type Errors = z.output<typeof ErrorsSchema>;
 
-export const toEvent = ({ user_type, ts, ...row }: Row): Row => ({
+const toEvent = ({ user_type, ts, ...row }: Row): Row => ({
   ...row,
   ts: iso(ts),
   userType: user_type,
@@ -78,10 +80,7 @@ export const trace = async (store: EventsStore, agcid: string) => {
 const onExtension = (extension?: string) =>
   extension ? ' AND extension = {extension:String}' : '';
 
-export const stats = async (
-  store: EventsStore,
-  { window, extension }: z.output<typeof StatsSchema>
-) => {
+export const stats = async (store: EventsStore, { window, extension }: Stats) => {
   const params = { since: Since.parse(window), extension };
   const rows = await store.query(SQL.STATS(onExtension(extension)), params);
   return rows.map(({ q, ...row }): Row => {
@@ -100,10 +99,7 @@ export const hosts = async (store: EventsStore) =>
 export const containers = (store: EventsStore, host: string) =>
   store.query(SQL.CONTAINERS, { host });
 
-export const errors = async (
-  store: EventsStore,
-  { since, extension }: z.output<typeof ErrorsSchema>
-) =>
+export const errors = async (store: EventsStore, { since, extension }: Errors) =>
   (await store.query(SQL.ERRORS(onExtension(extension)), { since, extension })).map(
     ({ sample, ...row }): Row => ({ ...row, msg: sample, lastSeen: iso(row['lastSeen']) })
   );

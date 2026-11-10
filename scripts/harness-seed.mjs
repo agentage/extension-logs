@@ -7,117 +7,75 @@ const ISSUER = process.env.LOGS_ISSUER ?? 'http://localhost:4281';
 for (const url of [BASE, ISSUER])
   if (!['localhost', '127.0.0.1'].includes(new URL(url).hostname))
     throw new Error(`harness-seed posts to localhost or 127.0.0.1 only, not ${url}`);
+const post = (url, body, token) =>
+  fetch(url, {
+    method: 'POST',
+    headers: {
+      ...(token && { authorization: `Bearer ${token}` }),
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
 // Ingest takes a svc_ subject only; the dev issuer sets sub, the token command does not.
-const minted = await fetch(`${ISSUER}/token`, {
-  method: 'POST',
-  headers: { 'content-type': 'application/json' },
-  body: JSON.stringify({ scope: 'logs:write', sub: 'svc_seed' }),
-});
+const minted = await post(`${ISSUER}/token`, { scope: 'logs:write', sub: 'svc_seed' });
 if (!minted.ok) throw new Error(`the dev issuer at ${ISSUER} refused: ${minted.status}`);
 const { token } = await minted.json();
 
 const now = Date.now();
 const ago = (s) => new Date(now - s * 1000).toISOString();
 const id = () => randomBytes(16).toString('hex');
-const user = { user_type: 'user', sub: 'usr_seed', host: 'next-1', version: '0.2.0' };
-const http = (i, part, route, status, ms, agcid = id()) => ({
-  ...user,
-  ts: ago(600 - i * 5),
-  kind: 'http',
-  level: status >= 500 ? 'error' : 'info',
-  msg: `GET ${route} ${status}`,
-  extension: part[0],
-  part: part[1],
-  agcid,
-  fields: {
-    'http.request.method': 'GET',
-    'http.route': route,
-    'http.response.status_code': status,
-    'agentage.duration_ms': ms,
-  },
-});
-const line = (i, kind, level, msg, agcid, fields = {}) => ({
-  ...user,
-  ts: ago(590 - i * 5),
-  kind,
-  level,
-  msg,
-  extension: 'probe',
-  part: 'api',
-  agcid,
-  fields,
-});
-
+const many = (n, make) => Array.from({ length: n }, (_, i) => make(i));
 const trace = id();
+const first = (i) => (i === 0 ? trace : id());
+const user = { user_type: 'user', sub: 'usr_seed', host: 'next-1', version: '0.2.0' };
+const line = (at, [extension, part], kind, level, msg, agcid, fields = {}) => ({
+  ...{ ...user, ts: ago(at), kind, level, msg, extension, part, agcid, fields },
+});
+const probe = (i, ...rest) => line(590 - i * 5, ['probe', 'api'], ...rest);
+const http = (i, where, route, status, ms) => {
+  const level = status >= 500 ? 'error' : 'info';
+  const asked = { 'http.request.method': 'GET', 'http.route': route };
+  const fields = { ...asked, 'http.response.status_code': status, 'agentage.duration_ms': ms };
+  return line(600 - i * 5, where, 'http', level, `GET ${route} ${status}`, first(i), fields);
+};
+const mcp = (i) => ({
+  ...probe(i, 'mcp', 'info', `probe__echo ok ${8 + i}ms`, first(i), {
+    'gen_ai.tool.name': 'probe__echo',
+    'agentage.duration_ms': 8 + i,
+  }),
+  ...{ part: 'mcp', user_type: 'agent', client: 'claude-code' },
+});
+const machines = (i) =>
+  http(i, ['platform', 'api'], '/api/v1/machines', i % 30 === 7 ? 500 : 200, 20 + (i % 9) * 6);
+const openapi = (i) =>
+  http(i, ['probe', 'api'], '/api/v1/openapi.json', 200, i === 9 ? 1800 : 1200 + i * 10);
+const forced = { 'exception.type': 'Error', 'exception.message': 'forced' };
+const span = { 'agentage.span.name': 'store.query', 'agentage.duration_ms': 3 };
 const lines = [
-  ...Array.from({ length: 60 }, (_, i) =>
-    http(
-      i,
-      ['platform', 'api'],
-      '/api/v1/machines',
-      i % 30 === 7 ? 500 : 200,
-      20 + (i % 9) * 6,
-      i === 0 ? trace : undefined
-    )
-  ),
-  ...Array.from({ length: 10 }, (_, i) =>
-    http(
-      i,
-      ['probe', 'api'],
-      '/api/v1/openapi.json',
-      200,
-      i === 9 ? 1800 : 1200 + i * 10,
-      i === 0 ? trace : undefined
-    )
-  ),
-  ...Array.from({ length: 12 }, (_, i) => ({
-    ...line(i, 'mcp', 'info', `probe__echo ok ${8 + i}ms`, i === 0 ? trace : id(), {
-      'gen_ai.tool.name': 'probe__echo',
-      'agentage.duration_ms': 8 + i,
-    }),
-    part: 'mcp',
-    user_type: 'agent',
-    client: 'claude-code',
-  })),
-  ...Array.from({ length: 5 }, (_, i) =>
-    line(i, 'error', 'error', 'Error: forced', i === 0 ? trace : id(), {
-      'exception.type': 'Error',
-      'exception.message': 'forced',
-    })
-  ),
-  ...Array.from({ length: 6 }, (_, i) =>
-    line(i, 'log', i % 3 ? 'info' : 'warn', `emit ${i}`, trace)
-  ),
-  ...Array.from({ length: 4 }, (_, i) =>
-    line(i, 'span', 'info', 'store.query', trace, {
-      'agentage.span.name': 'store.query',
-      'agentage.duration_ms': 3,
-    })
-  ),
-  ...Array.from({ length: 3 }, (_, i) =>
-    line(i, 'event', 'info', 'probe.emitted', trace, { 'event.name': 'probe.emitted' })
+  ...many(60, machines),
+  ...many(10, openapi),
+  ...many(12, mcp),
+  ...many(5, (i) => probe(i, 'error', 'error', 'Error: forced', first(i), forced)),
+  ...many(6, (i) => probe(i, 'log', i % 3 ? 'info' : 'warn', `emit ${i}`, trace)),
+  ...many(4, (i) => probe(i, 'span', 'info', 'store.query', trace, span)),
+  ...many(3, (i) =>
+    probe(i, 'event', 'info', 'probe.emitted', trace, { 'event.name': 'probe.emitted' })
   ),
 ];
 
-const HOSTS = [
-  ['next-gw', 22],
-  ['next-1', 41],
-  ['next-2', 92],
-  ['next-data', 35],
-  ['next-logs', 18],
-];
+const HOSTS = { 'next-gw': 22, 'next-1': 41, 'next-2': 92, 'next-data': 35, 'next-logs': 18 };
 const stat = (host, name, fields) => ({
-  ts: ago(20),
-  kind: 'event',
-  level: 'info',
-  msg: `${name} ${host}`,
-  extension: 'estate',
-  part: 'agent',
-  host,
-  user_type: 'service',
-  fields: { 'event.name': name, ...fields },
+  ...{ ts: ago(20), kind: 'event', level: 'info', msg: `${name} ${host}`, extension: 'estate' },
+  ...{ part: 'agent', host, user_type: 'service', fields: { 'event.name': name, ...fields } },
 });
-const samples = HOSTS.flatMap(([host, cpu]) => [
+const box = (host, cpu) => (part, i) =>
+  stat(host, 'container.stats', {
+    'agentage.container.name': `${host}_${part}`,
+    'agentage.container.cpu_pct': cpu / (i + 2),
+    'agentage.container.mem_bytes': (120 + i * 40) * 1_048_576,
+    'agentage.container.mem_limit': 512 * 1_048_576,
+  });
+const samples = Object.entries(HOSTS).flatMap(([host, cpu]) => [
   stat(host, 'host.stats', {
     'agentage.host.cpu_pct': cpu,
     'agentage.host.mem_pct': 48,
@@ -125,24 +83,10 @@ const samples = HOSTS.flatMap(([host, cpu]) => [
     'agentage.host.load1': cpu / 50,
     'agentage.host.containers': 3,
   }),
-  ...['api', 'mcp', 'shipper'].map((part, i) =>
-    stat(host, 'container.stats', {
-      'agentage.container.name': `${host}_${part}`,
-      'agentage.container.cpu_pct': cpu / (i + 2),
-      'agentage.container.mem_bytes': (120 + i * 40) * 1_048_576,
-      'agentage.container.mem_limit': 512 * 1_048_576,
-    })
-  ),
+  ...['api', 'mcp', 'shipper'].map(box(host, cpu)),
 ]);
 
-const res = await fetch(`${BASE}/api/v1/events`, {
-  method: 'POST',
-  headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-  body: JSON.stringify([...lines, ...samples]),
-});
-console.log(
-  res.status,
-  JSON.stringify((await res.json()).data),
-  `${lines.length} lines, trace agcid ${trace}`
-);
+const res = await post(`${BASE}/api/v1/events`, [...lines, ...samples], token);
+const { data } = await res.json();
+console.log(res.status, JSON.stringify(data), `${lines.length} lines, trace agcid ${trace}`);
 if (!res.ok) process.exitCode = 1;

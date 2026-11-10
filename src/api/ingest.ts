@@ -3,7 +3,7 @@ import { fail, type ApiContext } from '@agentage/extension';
 import { type EventsStore } from '../lib/store.js';
 import { toRow, type Row } from './rows.js';
 
-export const MAX_ITEMS = 1000;
+const MAX_ITEMS = 1000;
 
 // C3 posts a bare JSON array; the kit types input as an object but parses whatever schema it gets.
 const input = z.array(z.unknown()).max(MAX_ITEMS) as unknown as z.ZodObject;

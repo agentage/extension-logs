@@ -12,7 +12,7 @@ owns servers, `/health`, auth, the scheduler and the images.
 | mcp    | [`src/mcp`](src/mcp/index.ts)       | `POST /mcp`: `logs__*` ([`logs.mcpc.json`](logs.mcpc.json))             |
 | worker | [`src/worker`](src/worker/index.ts) | job `retention`, nightly                                                |
 | ui     | [`src/ui`](src/ui/index.ts)         | the widgets `events`, `hosts`, `services`                               |
-| store  | `clickhouse` (manifest kind)        | one `events` table, [`store/001-events.sql`](store/001-events.sql)      |
+| store  | `clickhouse` (manifest kind)        | one `events` table, [`src/lib/ddl.ts`](src/lib/ddl.ts)                  |
 
 The line is `EventSchema` of `@agentage/extension/logs`; the ingest adds two rules (a `ts` inside
 the 30-day TTL, a `usr_` or `svc_` subject). The api, mcp and worker read the store connection
