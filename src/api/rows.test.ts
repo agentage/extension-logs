@@ -47,6 +47,10 @@ describe('a line to a row', () => {
     expect(toRow({ ts, kind, msg, extension, part }), 'no level').toBeNull();
   });
 
+  it('keeps an opaque subject id the auth service mints, with no prefix', () => {
+    expect(toRow({ ...LINES.log, sub: 'lk3Jq9Zx0aB7cD2eF5gH' })?.sub).toBe('lk3Jq9Zx0aB7cD2eF5gH');
+  });
+
   it.each([
     ['no ts', { ...LINES.log, ts: undefined }],
     ['an unknown kind', { ...LINES.log, kind: 'trace' }],
@@ -61,7 +65,9 @@ describe('a line to a row', () => {
     ],
     ['a year outside the store range', { ...LINES.log, ts: '9999-01-01T00:00:00Z' }],
     ['a sub that is an email', { ...LINES.log, sub: 'someone@example.com' }],
-    ['a sub without usr_ or svc_', { ...LINES.log, sub: 'tok_1' }],
+    ['a sub that is a short email', { ...LINES.log, sub: 'a@b.com' }],
+    ['a sub with free text', { ...LINES.log, sub: 'signed in as Ann' }],
+    ['a sub over 64 characters', { ...LINES.log, sub: 'a'.repeat(65) }],
     ['not an object', 'a line'],
   ])('refuses %s', (_name, line) => {
     expect(toRow(line)).toBeNull();
