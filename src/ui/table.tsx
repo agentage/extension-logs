@@ -41,7 +41,7 @@ export interface Row {
   cells: ReactNode[];
 }
 
-const CSS = `:host{display:block}table{width:100%;table-layout:fixed;border-collapse:collapse;font:var(--text-xs)/1.5 var(--font-mono,monospace);color:var(--color-foreground)}
+const CSS = `:host{display:block;min-width:0}table{width:100%;table-layout:fixed;border-collapse:collapse;font:var(--text-xs)/1.5 var(--font-mono,monospace);color:var(--color-foreground)}
 caption{text-align:left;font-weight:600;padding:4px 0}th,td{text-align:left;padding:3px 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-bottom:1px solid var(--color-border)}
 tr.red td{color:var(--color-destructive);font-weight:600}tr.red td:first-child{box-shadow:inset 3px 0 var(--color-destructive)}
 [title]{cursor:default}button{font:inherit;color:inherit;background:none;border:0;padding:0;text-decoration:underline;cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis}
@@ -77,28 +77,38 @@ interface TableProps {
   caption: string;
   cols: Record<string, number>;
   load: Load<Row[]>;
-  min?: string;
+  rest?: number;
 }
 
-// cols = name: width in ch, 0 takes the rest; the box keeps its size across the three states.
-export const Table = ({ caption, cols, load, min }: TableProps) => (
-  <div className="box">
-    <style>{CSS}</style>
-    <table style={{ minWidth: min }}>
-      <caption>{caption}</caption>
-      <thead>
-        <tr>
-          {Object.entries({ state: 14, ...cols }).map(([col, ch]) => (
-            <th key={col} scope="col" style={ch ? { width: `calc(${ch}ch + 8px)` } : undefined}>
-              {col}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>{body(load, Object.keys(cols).length + 1)}</tbody>
-    </table>
-  </div>
-);
+// A fixed table's intrinsic width counts only set widths: the min-width holds the rest column.
+const minWidth = (cols: Record<string, number>, rest: number) => {
+  const ch = Object.values(cols).reduce((sum, w) => sum + w, rest);
+  return `calc(${ch}ch + ${Object.keys(cols).length * 8}px)`;
+};
+
+// cols = name: width in ch, 0 takes the rest, at least rest ch; the width is the same in every state.
+export function Table({ caption, cols, load, rest = 16 }: TableProps) {
+  const all = { state: 14, ...cols };
+  return (
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- a narrow box scrolls, keys must reach it
+    <div className="box" role="region" aria-label={caption} tabIndex={0}>
+      <style>{CSS}</style>
+      <table style={{ minWidth: minWidth(all, rest) }}>
+        <caption>{caption}</caption>
+        <thead>
+          <tr>
+            {Object.entries(all).map(([col, ch]) => (
+              <th key={col} scope="col" style={ch ? { width: `calc(${ch}ch + 8px)` } : undefined}>
+                {col}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>{body(load, Object.keys(all).length)}</tbody>
+      </table>
+    </div>
+  );
+}
 
 // An opened row: a back button, and its heading takes the focus.
 export const Back = ({ back, text }: { back: () => void; text: string }) => {

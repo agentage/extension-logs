@@ -36,13 +36,14 @@ const host = (name: string, cpu: number) => ({
     red: cpu > 80,
   },
 });
-const stat = (part: string, failed: number, p95: number) => ({
+const ROUTE = '/api/v1/machines/{machineId}/extensions/{extensionId}/settings';
+const stat = (part: string, failed: number, p95: number, extension = 'probe', route = '/a') => ({
   ...{
-    extension: 'probe',
+    extension,
     part,
     kind: 'http',
     method: 'GET',
-    route: '/a',
+    route,
     calls: 100,
     errors: failed,
   },
@@ -51,9 +52,9 @@ const stat = (part: string, failed: number, p95: number) => ({
 const DATA: Record<string, unknown> = {
   events: [event(1, 'info'), event(2, 'error')],
   traces: { agcid: A, hops: 2, ms: 41, ok: true, events: [event(1, 'info'), event(3, 'info')] },
-  hosts: [host('next-1', 20), host('next-2', 92)],
+  hosts: [host('next-logs', 20), host('next-2', 92)],
   containers: [{ name: 'logs_api', cpu: 12.5, mem: 104_857_600, limit: 536_870_912 }],
-  stats: [stat('api', 0, 40), stat('mcp', 2, 30)],
+  stats: [stat('api', 0, 40), stat('mcp', 2, 30), stat('api', 0, 20, 'platform', ROUTE)],
 };
 const json = (body: unknown, status = 200) => ({
   status,
@@ -214,3 +215,29 @@ test('services: the reason, availability and the worst route p95', async ({ page
   await expect(el.locator('tr.red')).toContainText('avail < 99.0 %probe/mcp1002.0%30 ms98.00%');
   await expect(el.getByRole('columnheader', { name: 'p95 worst route' })).toBeVisible();
 });
+
+// A fixed table gives its rest column only what the set widths leave; real names must still fit.
+const NAMES = [
+  ['events', 4, 'platform/api'],
+  ['hosts', 2, 'next-logs'],
+  ['services', 2, 'platform/api'],
+] as const;
+const clipped = (cells: Element[]) =>
+  cells
+    .map((td) => td.querySelector('button') ?? td)
+    .filter((c) => c.scrollWidth > c.clientWidth || c.getBoundingClientRect().right > innerWidth)
+    .map((c) => c.textContent);
+for (const width of [400, 1280])
+  for (const [widget, col, name] of NAMES)
+    test(`${widget}: the name column reads in full at ${width} px, no page scroll`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 900 });
+      const { el } = await open(page, widget);
+      await expect(el.locator(`td:nth-child(${col})`, { hasText: name })).not.toHaveCount(0);
+      expect(
+        await el.locator(`th:nth-child(${col}), td:nth-child(${col})`).evaluateAll(clipped)
+      ).toEqual([]);
+      const scroll = await page.evaluate(() => document.documentElement.scrollWidth);
+      expect(scroll).toBeLessThanOrEqual(width);
+    });
