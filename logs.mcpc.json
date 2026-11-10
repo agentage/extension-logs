@@ -1,7 +1,7 @@
 {
   "serverInfo": {
     "name": "agentage-logs",
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
   "tools": [
     {
@@ -88,7 +88,6 @@
                   "type": "object"
                 },
                 "host": {
-                  "default": "",
                   "maxLength": 253,
                   "type": "string"
                 },
@@ -100,7 +99,6 @@
                   "type": "string"
                 },
                 "level": {
-                  "default": "info",
                   "enum": ["info", "warn", "error"],
                   "type": "string"
                 },
@@ -111,6 +109,7 @@
                   "type": "number"
                 },
                 "msg": {
+                  "maxLength": 2000,
                   "type": "string"
                 },
                 "ok": {
@@ -127,7 +126,7 @@
                 "session": {
                   "anyOf": [
                     {
-                      "maxLength": 200,
+                      "maxLength": 128,
                       "type": "string"
                     },
                     {
@@ -142,7 +141,7 @@
                 "sub": {
                   "anyOf": [
                     {
-                      "pattern": "^(usr|svc)_[\\w-]{1,64}$",
+                      "maxLength": 128,
                       "type": "string"
                     },
                     {
@@ -170,7 +169,6 @@
                 "extension",
                 "part",
                 "version",
-                "host",
                 "agcid",
                 "sub",
                 "session",
@@ -247,7 +245,6 @@
                   "type": "object"
                 },
                 "host": {
-                  "default": "",
                   "maxLength": 253,
                   "type": "string"
                 },
@@ -259,7 +256,6 @@
                   "type": "string"
                 },
                 "level": {
-                  "default": "info",
                   "enum": ["info", "warn", "error"],
                   "type": "string"
                 },
@@ -270,6 +266,7 @@
                   "type": "number"
                 },
                 "msg": {
+                  "maxLength": 2000,
                   "type": "string"
                 },
                 "ok": {
@@ -286,7 +283,7 @@
                 "session": {
                   "anyOf": [
                     {
-                      "maxLength": 200,
+                      "maxLength": 128,
                       "type": "string"
                     },
                     {
@@ -301,7 +298,7 @@
                 "sub": {
                   "anyOf": [
                     {
-                      "pattern": "^(usr|svc)_[\\w-]{1,64}$",
+                      "maxLength": 128,
                       "type": "string"
                     },
                     {
@@ -329,7 +326,6 @@
                 "extension",
                 "part",
                 "version",
-                "host",
                 "agcid",
                 "sub",
                 "session",

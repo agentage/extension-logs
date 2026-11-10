@@ -14,7 +14,10 @@ This file only adds what the tree does not say.
 - `openapi.json` and `logs.mcpc.json` are committed contracts: after a route or tool change run
   `npm run build`, `npx agentage extension check --write`, then `npm run format`.
 - Release: bump `package.json`, `check --write`, commit, push the tag `v{version}` on master;
-  `release.yml` publishes. Never move a `v*` tag.
+  `release.yml` pushes the images and attaches the record (the package is private: no npm).
+  Never move a `v*` tag.
+- The store connection is the file the estate mounts, `/run/secrets/store-url`
+  (`src/lib/connection.ts`); never declare `store-url` in `agentage.secrets` (the estate refuses it).
 
 ## Commands
 

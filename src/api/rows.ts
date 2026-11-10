@@ -1,4 +1,17 @@
-import { EventSchema, type Event } from '../lib/event.schema.js';
+import { EventSchema, type Event } from '@agentage/extension/logs';
+
+const DAY = 86_400_000;
+// Inside the TTL and at most an hour ahead: one row outside would fail its whole batch insert.
+const recent = ({ ts }: Event) => {
+  const at = Date.parse(ts);
+  return at >= Date.now() - 30 * DAY && at <= Date.now() + DAY / 24;
+};
+// The ingest's two rules on top of the line: the TTL window and a usr_ or svc_ subject, never an email.
+const SUB = /^(usr|svc)_[\w-]{1,64}$/;
+const LineSchema = EventSchema.refine(recent, 'ts outside the last 30 days').refine(
+  ({ sub }) => sub === null || SUB.test(sub),
+  'sub is not usr_ or svc_'
+);
 
 const SECRET_KEY = /token|secret|password|key|authorization|cookie/i;
 const MAX_STRING = 200;
@@ -55,9 +68,9 @@ export type Row = Event & ReturnType<typeof promote>;
 
 // One line to one row, or null when it fails the schema.
 export const toRow = (line: unknown): Row | null => {
-  const parsed = EventSchema.safeParse(line);
+  const parsed = LineSchema.safeParse(line);
   if (!parsed.success) return null;
   const fields = redact(parsed.data.fields) as Event['fields'];
   const event = raw({ ...parsed.data, msg: parsed.data.msg.slice(0, MAX_STRING), fields });
-  return { ...event, client: event.client ?? '', ...promote(event) } as Row;
+  return { ...event, host: event.host ?? '', client: event.client ?? '', ...promote(event) } as Row;
 };

@@ -1,6 +1,7 @@
 {
   "name": "@agentage/extension-logs",
-  "version": "0.1.0",
+  "version": "0.2.0",
+  "private": true,
   "description": "The logs extension: one events table in ClickHouse, the ingest, search, trace, stats and hosts api, five MCP tools and three widgets",
   "type": "module",
   "license": "MIT",
@@ -12,12 +13,9 @@
   "bugs": {
     "url": "https://github.com/agentage/extension-logs/issues"
   },
-  "publishConfig": {
-    "access": "public"
-  },
   "engines": {
     "node": ">=22",
-    "agentage": "^0.11"
+    "agentage": "^0.12"
   },
   "agentage": {
     "id": "logs",
@@ -25,12 +23,11 @@
       "ui": true,
       "api": true,
       "mcp": true,
-      "worker": true
+      "worker": true,
+      "store": "clickhouse"
     },
     "settings": {},
-    "secrets": [
-      "store-url"
-    ]
+    "secrets": []
   },
   "exports": {
     "./agentage-extension.json": "./dist/agentage-extension.json",
@@ -55,13 +52,13 @@
     "harness:seed": "node scripts/harness-seed.mjs"
   },
   "dependencies": {
-    "@agentage/extension": "0.11.0",
+    "@agentage/extension": "^0.12.1",
     "@clickhouse/client": "1.25.0",
     "express": "^5.1.0",
     "zod": "^4.2.0"
   },
   "devDependencies": {
-    "@agentage/cli": "0.50.2",
+    "@agentage/cli": "0.50.4",
     "@agentage/widget": "^0.3.0",
     "@axe-core/playwright": "4.14.0",
     "@playwright/test": "1.64.1",

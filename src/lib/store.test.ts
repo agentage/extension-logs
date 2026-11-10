@@ -1,7 +1,8 @@
 import { createTestContext } from '@agentage/extension';
 import { describe, expect, it, vi } from 'vitest';
 import { EVENTS_DDL } from './ddl.js';
-import { createEventsStore, isOutage, type Clickhouse } from './store.js';
+import { readConnection } from './connection.js';
+import { clickhouse, createEventsStore, isOutage, lazy, type Clickhouse } from './store.js';
 
 const refused = Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' });
 
@@ -10,6 +11,7 @@ const fake = (command = vi.fn(async () => undefined)) => {
     command,
     insert: vi.fn(async () => undefined),
     query: vi.fn(async () => []),
+    ping: vi.fn(async () => true),
   };
   return { ch, store: createEventsStore(ch, createTestContext().log) };
 };
@@ -44,5 +46,39 @@ describe('the events store', () => {
     [null, false],
   ])('tells an outage from a fault (%#)', (err, outage) => {
     expect(isOutage(err)).toBe(outage);
+  });
+});
+
+describe('the lazy client', () => {
+  it('opens on first use, once', async () => {
+    const { ch } = fake();
+    const open = vi.fn(() => ch);
+    const client = lazy(open, createTestContext().log);
+    expect(open).not.toHaveBeenCalled();
+    await client.query('SELECT 1');
+    await client.ping();
+    expect(open).toHaveBeenCalledTimes(1);
+  });
+
+  it('answers UNAVAILABLE and logs while the file is missing, and opens once it is there', async () => {
+    const ctx = createTestContext();
+    const { ch } = fake();
+    const missing = (): string => {
+      throw Object.assign(new Error('no file'), { code: 'ENOENT' });
+    };
+    let read: () => string = missing;
+    const client = lazy(() => (readConnection(read), ch), ctx.log);
+    await expect(client.ping()).rejects.toMatchObject({ code: 'UNAVAILABLE' });
+    expect(ctx.logs.map((l) => l.level)).toContain('error');
+    read = () => 'http://a:b@c:8123/d';
+    await expect(client.ping()).resolves.toBe(true);
+  });
+
+  it('answers UNAVAILABLE on a malformed store-url, never quoting it', async () => {
+    const ctx = createTestContext();
+    const client = lazy(() => clickhouse(readConnection(() => 'postgres://u:secret@h/d')), ctx.log);
+    await expect(client.query('SELECT 1')).rejects.toMatchObject({ code: 'UNAVAILABLE' });
+    await expect(client.insert('events', [])).rejects.toMatchObject({ code: 'UNAVAILABLE' });
+    expect(JSON.stringify(ctx.logs)).not.toContain('secret');
   });
 });

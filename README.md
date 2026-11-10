@@ -12,6 +12,13 @@ owns servers, `/health`, auth, the scheduler and the images.
 | mcp    | [`src/mcp`](src/mcp/index.ts)       | `POST /mcp`: `logs__*` ([`logs.mcpc.json`](logs.mcpc.json))             |
 | worker | [`src/worker`](src/worker/index.ts) | job `retention`, nightly                                                |
 | ui     | [`src/ui`](src/ui/index.ts)         | the widgets `events`, `hosts`, `services`                               |
+| store  | `clickhouse` (manifest kind)        | one `events` table, [`store/001-events.sql`](store/001-events.sql)      |
+
+The line is `EventSchema` of `@agentage/extension/logs`; the ingest adds two rules (a `ts` inside
+the 30-day TTL, a `usr_` or `svc_` subject). The api, mcp and worker read the store connection
+from the file the estate mounts, `/run/secrets/store-url` (`http://logs:{pw}@logs_store:8123/logs`:
+user, password, host, database), on first use; `/health` of the api carries `checks.clickhouse`
+(a `SELECT 1`, bounded under 1 s).
 
 ## Scopes
 
@@ -31,8 +38,25 @@ Needs Node 22+, npm 10+, Docker, `git` and `jq`.
 ```bash
 npm ci && npm run verify                 # type-check, lint, format, tests, build
 npx agentage extension check             # PASS logs {version} conforms
-npx agentage extension up                # the part images behind a local gateway on 4280
 ```
+
+`up` runs no ClickHouse and mounts only declared secrets, while the estate refuses a declared
+`store-url`. So a local run starts its own ClickHouse and declares `store-url` for that run only,
+as `ci.yml` does; never commit that line.
+
+```bash
+docker run -d --name logs-store -p 8123:8123 -e CLICKHOUSE_PASSWORD=local clickhouse/clickhouse-server:26.8
+jq '.agentage.secrets = ["store-url"]' package.json > p.json && mv p.json package.json
+AGENTAGE_SECRET_STORE_URL=http://default:local@172.17.0.1:8123 npx agentage extension up
+git checkout package.json                # after up: the images are built
+```
+
+## Release
+
+Set the version, `npx agentage extension check --write`, merge, push the tag `v{version}` on master.
+`release.yml` pushes the part images to `ghcr.io/agentage/logs-{part}` and attaches
+`agentage-extension.json` (the images by digest) to the GitHub release; the estate pins those.
+The package is `private`: no npm publish.
 
 ## Widgets in the harness
 
@@ -41,7 +65,7 @@ The ui part serves the widget kit's harness page under `up`; the seed posts 100 
 cpu 92) with their containers, and the services rows (one red by availability, one by p95).
 
 ```bash
-npx agentage extension up                # needs a ClickHouse for store-url, see ci.yml
+npx agentage extension up                # with ClickHouse and store-url, see Run
 npm run harness:seed                     # LOGS_URL and LOGS_ISSUER override 4280 and 4281
 echo "http://localhost:4280/ui/$(jq -r .version package.json)/harness.html?widget=events&scope=logs:admin"
 ```

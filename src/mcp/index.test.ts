@@ -6,9 +6,10 @@ vi.mock('../lib/store.js', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   clickhouse: () => ({ command: async () => undefined, insert: async () => undefined, query }),
 }));
+vi.mock('../lib/connection.js', () => ({ readConnection: () => ({}) }));
 const { create } = await import('./index.js');
 
-const ctx = () => createTestContext({ secrets: { storeUrl: 'http://ch:8123' } });
+const ctx = () => createTestContext();
 let server: Awaited<ReturnType<typeof startTestMcp>>;
 beforeAll(async () => {
   server = await startTestMcp({ create, ctx: ctx() });

@@ -85,12 +85,16 @@ jobs:
           npm ci --prefix e2e-suite --no-audit --no-fund
           npx --prefix e2e-suite playwright install chromium
 
-      # up has no clickhouse store kind yet (kit 0.11): the parts reach this one through the docker host.
+      # up (kit 0.12) runs no clickhouse store: the parts reach this one through the docker host.
       - name: ClickHouse 26.8 for the parts
         run: docker run -d --name logs-store -p 8123:8123 -e CLICKHOUSE_PASSWORD=local clickhouse/clickhouse-server:26.8
 
+      # The estate mounts /run/secrets/store-url and refuses it declared; up mounts declared secrets only.
+      - name: Declare store-url for this run only (README, Run)
+        run: jq '.agentage.secrets = ["store-url"]' package.json > p.json && mv p.json package.json
+
       # The cli and its kit come from this lockfile: a cli or kit patch needs a commit here.
-      - name: agentage extension up (the release recipes, store, dev issuer, gateway)
+      - name: agentage extension up (the release recipes, dev issuer, gateway)
         env:
           AGENTAGE_SECRET_STORE_URL: http://default:local@172.17.0.1:8123
         run: node_modules/.bin/agentage extension up
@@ -103,7 +107,7 @@ jobs:
           code=$(curl -s -o /dev/null -w '%{http_code}' -H "authorization: Bearer $(node_modules/.bin/agentage extension token --scope logs:write)" \
             -H 'content-type: application/json' -d '[]' localhost:4280/api/v1/events)
           echo "usr_ subject with logs:write: $code"; test "$code" = 403
-          line="{\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%S.000Z)\",\"kind\":\"log\",\"msg\":\"ci ingest\",\"extension\":\"logs\",\"part\":\"ci\"}"
+          line="{\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%S.000Z)\",\"level\":\"info\",\"kind\":\"log\",\"msg\":\"ci ingest\",\"extension\":\"logs\",\"part\":\"ci\"}"
           curl -sf -H "authorization: Bearer $T" -H 'content-type: application/json' \
             -d "[$line,$line]" localhost:4280/api/v1/events | tee /dev/stderr | jq -e '.data == {accepted: 2, rejected: 0}'
           n=$(docker exec logs-store clickhouse-client --password local -q "SELECT count() FROM events WHERE msg = 'ci ingest'")

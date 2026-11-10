@@ -8,6 +8,7 @@ const db = testStore(process.env['CLICKHOUSE_URL'], 'logs_formula');
 const ts = new Date(Date.now() - 60_000).toISOString();
 const line = (route: string, status: number, extra: object = {}) => ({
   ts,
+  level: 'info',
   kind: 'http',
   msg: route,
   extension: 'formula',
