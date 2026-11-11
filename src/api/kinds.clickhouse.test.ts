@@ -69,6 +69,20 @@ describe.runIf(db)('every kind of GET /stats on ClickHouse', () => {
     expect(steps).toEqual([{ bucket: expect.stringMatching(/:00\.000Z$/), count: 1 }]);
   });
 
+  it('availability is a number from 50 requests: 50 is one, 49 null', async () => {
+    const floor = (route: string, n: number) =>
+      Array.from({ length: n }, (_, i) => ({
+        ...line('http', 'api', { 'http.route': route, 'http.response.status_code': i ? 200 : 503 }),
+        extension: 'floor',
+      }));
+    await db!.store.insert([...floor('/50', 50), ...floor('/49', 49)].map(toRow) as object[]);
+    const rows = await ask({ kind: 'http', extension: 'floor', by: 'route', sort: 'route' });
+    expect(rows.map((r) => [r['route'], r['requests'], r['availability']])).toEqual([
+      ['/50', 50, 0.98],
+      ['/49', 49, null],
+    ]);
+  });
+
   it.each(GROUP_KINDS)('%s answers by, bucket, a measure sort and a column sort', async (kind) => {
     const measure = Object.keys(KIND_DEFS[kind].measures)[0];
     const base = { kind, since: '1h', by: 'extension' };

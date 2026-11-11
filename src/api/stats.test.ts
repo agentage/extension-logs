@@ -51,13 +51,11 @@ describe('GET /stats with kind', () => {
     });
   });
 
-  it('a call without kind keeps the window form and its answer', async () => {
-    await get('/stats?window=15m&by=bogus&sort=bogus');
-    expect(query).toHaveBeenLastCalledWith(
-      expect.stringContaining('LIMIT 201 BY extension, part'),
-      expect.objectContaining({ since: expect.any(String) })
-    );
-    expect((await get('/stats?window=2d')).status).toBe(400);
+  it('a call without kind answers 400 naming kind: the window form is gone', async () => {
+    const { error } = await body('/stats?window=15m');
+    expect(error.code).toBe('VALIDATION_ERROR');
+    expect(error.details.map((d) => d.field)).toContain('kind');
+    expect(query).not.toHaveBeenCalled();
   });
 
   it('window with kind answers 400: window is the form without kind', async () => {

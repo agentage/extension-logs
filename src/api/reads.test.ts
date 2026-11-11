@@ -47,33 +47,30 @@ const as = (...scopes: string[]): Caller => ({ sub: 'usr_test', scopes });
 const A = 'a'.repeat(32);
 const cursor = (pair: unknown) => Buffer.from(JSON.stringify(pair)).toString('base64url');
 interface Body {
-  data: object[] & object;
+  data: object[];
   meta: { pagination: object };
 }
 
 describe('the read routes', () => {
   it.each([
     ['/events', 'logs:read', 403],
-    [`/traces/${A}`, 'logs:read', 403],
     ['/events', 'logs:write', 403],
-    [`/traces/${A}`, 'logs:write', 403],
-    ['/stats', 'logs:write', 403],
-    ['/stats', 'logs:read', 403],
-    ['/hosts', 'logs:read', 403],
-    ['/hosts/next-1/containers', 'logs:read', 403],
-    ['/stats', 'logs:admin', 200],
-    ['/hosts', 'logs:admin', 200],
+    ['/stats?kind=http', 'logs:write', 403],
+    ['/stats?kind=http', 'logs:read', 403],
+    ['/stats?kind=http', 'logs:admin', 200],
     ['/events', 'logs:admin', 200],
-    [`/traces/${A}`, 'logs:admin', 200],
-    ['/hosts/next-1/containers', 'logs:admin', 200],
   ])('GET %s with %s answers %i', async (path, scope, status) => {
     expect((await get(path, as(scope))).status).toBe(status);
   });
 
-  it.each(['/events', `/traces/${A}`, '/stats', '/hosts'])(
-    'GET %s anonymous answers 401',
+  it.each(['/events', '/stats?kind=http'])('GET %s anonymous answers 401', async (path) => {
+    expect((await get(path, null)).status).toBe(401);
+  });
+
+  it.each([`/traces/${A}`, '/hosts', '/hosts/next-1/containers'])(
+    'GET %s is gone: 404',
     async (path) => {
-      expect((await get(path, null)).status).toBe(401);
+      expect((await get(path, as('logs:admin'))).status).toBe(404);
     }
   );
 
@@ -101,8 +98,8 @@ describe('the read routes', () => {
     `/events?cursor=${cursor([1])}`,
     '/events?cursor=bm9wZQ',
     '/events?since=yesterday',
-    `/traces/xyz`,
-    '/stats?window=2d',
+    '/stats',
+    '/stats?window=15m',
     `/events?q=${'x'.repeat(10_240)}`,
     '/events?limit=0',
     '/events?limit=-1',
@@ -110,12 +107,8 @@ describe('the read routes', () => {
     '/events?since=2026-11-10T10:00:00Z&until=2026-11-01T00:00:00Z',
     `/events?agcid=${'a'.repeat(31)}`,
     `/events?agcid=${'a'.repeat(33)}`,
-    `/traces/${'a'.repeat(33)}`,
     '/events?host=a%2Fb',
     '/events?host=..',
-    '/hosts/a%2Fb/containers',
-    '/hosts/..%2Fevents/containers',
-    '/hosts/next..1/containers',
   ])('refuses %s with 400 VALIDATION_ERROR', async (path) => {
     const res = await get(path, as('logs:admin'));
     expect(res.status).toBe(400);
@@ -148,38 +141,5 @@ describe('the read routes', () => {
       error: { code: 'INTERNAL', message: 'Internal error' },
     });
     expect(text).not.toMatch(/SELECT|logs_store|pw@|at .*\.js/);
-  });
-
-  it.each([
-    [
-      '201 routes of one part',
-      Array.from({ length: 201 }, (_, i) => ({ part: 'edge', route: `/${i}` })),
-      200,
-    ],
-    ['1001 parts', Array.from({ length: 1001 }, (_, i) => ({ part: `p${i}`, route: '/' })), 1000],
-  ])('caps /stats at %s and sets meta.truncated', async (_, rows, kept) => {
-    const stat = { extension: 'x', kind: 'http', method: 'GET', calls: 1, errors: 0, failed: 0 };
-    const full = rows.map((r) => ({
-      ...stat,
-      ...r,
-      requests: 1,
-      users: 0,
-      availability: null,
-      q: [1, 2, 3],
-    }));
-    query.mockResolvedValueOnce(full);
-    const body = (await (await get('/stats', as('logs:admin'))).json()) as Body;
-    expect(body.data).toHaveLength(kept);
-    expect(body.meta).toEqual({ truncated: true });
-    query.mockResolvedValueOnce(full.slice(0, 3));
-    expect(((await (await get('/stats', as('logs:admin'))).json()) as Body).meta).toEqual({
-      truncated: false,
-    });
-  });
-
-  it('traces a known agcid: hops, ms, ok', async () => {
-    query.mockResolvedValueOnce([row, { ...row, kind: 'span', ts: '2026-11-10 09:12:03.450' }]);
-    const body = (await (await get(`/traces/${A}`, as('logs:admin'))).json()) as Body;
-    expect(body.data).toMatchObject({ agcid: A, hops: 1, ms: 40, ok: true });
   });
 });

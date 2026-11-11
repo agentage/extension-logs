@@ -10,10 +10,6 @@ vi.mock('../lib/connection.js', () => ({ readConnection: () => ({}) }));
 const { create } = await import('./index.js');
 
 const ctx = () => createTestContext();
-const STAT = {
-  ...{ extension: 'x', part: 'edge', kind: 'http', method: 'GET', calls: 1, errors: 0 },
-  ...{ failed: 0, requests: 1, users: 0, availability: null, q: [1, 2, 3] },
-};
 let server: Awaited<ReturnType<typeof startTestMcp>>;
 beforeAll(async () => {
   server = await startTestMcp({ create, ctx: ctx() });
@@ -21,12 +17,14 @@ beforeAll(async () => {
 afterAll(() => server.close());
 
 describe('the logs tools', () => {
-  it('declares the five tools of 0.2 and the two reads, each logs:admin', () => {
+  it('declares the two reads only, each logs:admin', () => {
     const context = ctx();
     create(context);
     const tools = context.tools.map(({ name, spec }) => [name, spec.scope]);
-    const names = ['search', 'trace', 'errors', 'stats', 'hosts', 'query', 'aggregate'];
-    expect(tools).toEqual(names.map((n) => [n, 'admin']));
+    expect(tools).toEqual([
+      ['query', 'admin'],
+      ['aggregate', 'admin'],
+    ]);
   });
 
   it('query reads rows oldest first for a trace, with a next cursor', async () => {
@@ -65,53 +63,4 @@ describe('the logs tools', () => {
       expect(spec.description.match(/^- .*: \{/gm)?.length).toBeGreaterThanOrEqual(4);
     }
   });
-
-  it('search runs the api SQL with a default limit of 20', async () => {
-    expect(await server.call('search', { level: 'error' })).toEqual({ events: [] });
-    expect(query).toHaveBeenLastCalledWith(
-      expect.stringContaining('ORDER BY ts DESC, id DESC'),
-      expect.objectContaining({ level: 'error', limit: 21 })
-    );
-  });
-
-  it('trace answers an unknown agcid with no events', async () => {
-    const agcid = 'f'.repeat(32);
-    expect(await server.call('trace', { agcid })).toEqual({
-      agcid,
-      hops: 0,
-      ms: 0,
-      ok: true,
-      events: [],
-    });
-  });
-
-  it('errors, stats and hosts answer their rows', async () => {
-    expect(await server.call('errors', {})).toEqual({ errors: [] });
-    expect(await server.call('stats', { window: '24h' })).toEqual({ stats: [] });
-    const many = Array.from({ length: 201 }, (_, i) => ({ ...STAT, route: `/${i}` }));
-    query.mockResolvedValueOnce(many);
-    const cut = (await server.call('stats', { window: '24h' })) as {
-      stats: object[];
-      note: string;
-    };
-    expect(cut.stats).toHaveLength(200);
-    expect(cut.note).toMatch(/^truncated: /);
-    expect(await server.call('hosts', {})).toEqual({ hosts: [] });
-    query.mockResolvedValueOnce([{ name: 'root_api.1', cpu: 7.5, mem: 1, limit: 2 }]);
-    expect(await server.call('hosts', { host: 'next-1' })).toEqual({
-      containers: [{ name: 'root_api.1', cpu: 7.5, mem: 1, limit: 2 }],
-    });
-    expect(query).toHaveBeenLastCalledWith(expect.stringContaining("'container.stats'"), {
-      host: 'next-1',
-    });
-  });
-
-  it.each([{ host: '../x' }, { host: 'a/b' }])(
-    'hosts refuses %o before the store',
-    async (args) => {
-      query.mockClear();
-      await expect(server.call('hosts', args)).rejects.toThrow();
-      expect(query).not.toHaveBeenCalled();
-    }
-  );
 });

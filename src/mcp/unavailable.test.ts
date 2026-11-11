@@ -11,7 +11,7 @@ const { create } = await import('./index.js');
 describe('the logs tools without a store connection', () => {
   it('answer the UNAVAILABLE tool error on a malformed store-url', async () => {
     const server = await startTestMcp({ create, ctx: createTestContext() });
-    await expect(server.call('search', {})).rejects.toThrow('The store is unavailable');
+    await expect(server.call('query', {})).rejects.toThrow('The store is unavailable');
     await server.close();
   });
 });

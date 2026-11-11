@@ -104,13 +104,8 @@ const issuesOf = (input: Fields): Issue[] => {
 };
 
 // The per-kind rules: by, sort and a cursor are checked against the kind's closed lists.
-export const checkGroups = (
-  input: Omit<Fields, 'kind'> & { kind?: Fields['kind'] },
-  ctx: z.RefinementCtx
-) => {
-  if (input.kind === undefined) return;
-  for (const { message, path } of issuesOf(input as Fields))
-    ctx.addIssue({ code: 'custom', message, path });
+export const checkGroups = (input: Fields, ctx: z.RefinementCtx) => {
+  for (const { message, path } of issuesOf(input)) ctx.addIssue({ code: 'custom', message, path });
 };
 
 export const GroupsQuery = z.object(GROUP_FIELDS).superRefine(checkGroups);
