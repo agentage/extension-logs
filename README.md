@@ -1,18 +1,18 @@
 # extension-logs
 
 The logs extension: every part's telemetry line (one JSON line per unit of work) lands in one
-ClickHouse `events` table; the api serves ingest and two reads (rows and groups, below) beside
-the 0.2 trace and hosts routes, the mcp part seven tools on the same SQL, the worker a nightly `retention` check, the ui three widgets. Each
+ClickHouse `events` table; the api serves ingest and two reads (rows and groups, below), the mcp
+part the same two reads as tools, the worker a nightly `retention` check, the ui three widgets. Each
 part is only `create(ctx)`; the kit [`@agentage/extension`](https://github.com/agentage/platform)
 owns servers, `/health`, auth, the scheduler and the images.
 
-| Part   | Source                              | Serves                                                                  |
-| ------ | ----------------------------------- | ----------------------------------------------------------------------- |
-| api    | [`src/api`](src/api/index.ts)       | `/api/v1/events`, `/traces/{agcid}`, `/stats`, `/hosts`, `openapi.json` |
-| mcp    | [`src/mcp`](src/mcp/index.ts)       | `POST /mcp`: `logs__*` ([`logs.mcpc.json`](logs.mcpc.json))             |
-| worker | [`src/worker`](src/worker/index.ts) | job `retention`, nightly                                                |
-| ui     | [`src/ui`](src/ui/index.ts)         | the widgets `events`, `hosts`, `services`                               |
-| store  | `clickhouse` (manifest kind)        | one `events` table, [`src/lib/ddl.ts`](src/lib/ddl.ts)                  |
+| Part   | Source                              | Serves                                                      |
+| ------ | ----------------------------------- | ----------------------------------------------------------- |
+| api    | [`src/api`](src/api/index.ts)       | `/api/v1/events`, `/stats`, `openapi.json`                  |
+| mcp    | [`src/mcp`](src/mcp/index.ts)       | `POST /mcp`: `logs__*` ([`logs.mcpc.json`](logs.mcpc.json)) |
+| worker | [`src/worker`](src/worker/index.ts) | job `retention`, nightly                                    |
+| ui     | [`src/ui`](src/ui/index.ts)         | the widgets `events`, `hosts`, `services`                   |
+| store  | `clickhouse` (manifest kind)        | one `events` table, [`src/lib/ddl.ts`](src/lib/ddl.ts)      |
 
 The line is `EventSchema` of `@agentage/extension/logs`; the ingest adds two rules (a `ts` inside
 the 30-day TTL, a subject that is an opaque id `[A-Za-z0-9_-]{1,64}`, never an email). The api, mcp and worker read the store connection
@@ -37,11 +37,9 @@ runs the `ALTER` only when `SHOW CREATE TABLE events` lacks the setting.
 
 Every read runs with `max_execution_time` 9 s, `max_memory_usage` 256 MB and `max_result_rows`
 10000 (throw, never a silent cut), so one wide query cannot take the 2 GB store; past a limit the
-read answers 503 `UNAVAILABLE` "The store is busy: narrow the query or retry". `/stats` returns
-at most 200 routes per part (so edge routes cannot crowd out a part's quiet ones) and 1000 rows
-in all, by calls; when it cut a row it says so: `meta.truncated: true` on `GET /stats`, a `note` on
-`logs__stats`. The groups form of `/stats` pages instead (below); the `services` widget reads it
-through `logs__aggregate` and shows `truncated` in its caption.
+read answers 503 `UNAVAILABLE` "The store is busy: narrow the query or retry". `/stats` pages
+(below); the `services` widget reads it through `logs__aggregate` and shows `truncated` in its
+caption.
 
 ## The two reads
 
@@ -61,8 +59,8 @@ agcid); `/stats` also `user_type`.
   every page is cut from the same rows; a cursor sent with another kind, `by`, sort, order or filter
   is a 400. Page 1 ends 5 s before now (unless `until` is given), so a late row cannot move a group
   between pages. A `bucket` draws at most 1500 steps, and a call groups at most 100000 groups (past
-  it, 503 busy). Without `kind`, `/stats` answers the 0.2 form (`window`, `extension`); `window`
-  with `kind` is a 400. `kind` also takes the lists whose kinds share measures,
+  it, 503 busy). `kind` is required: without it, or with `window` (the 0.2 form, gone in 0.5),
+  `/stats` is a 400. `kind` also takes the lists whose kinds share measures,
   `http,mcp` (one number over both, quantiles and users over the union) and `log,event`, in either
   order (another list is a 400 that names the allowed ones), and `any` (every row: count, firstSeen, lastSeen); both add `kind` to `by`.
   Quantiles, averages and percents answer at most 2 decimals, availability and `under` 4.
@@ -113,11 +111,11 @@ default window is 24 h (`host` 1 h, `container` 5 min); the default sort is the 
 Any account can mint `logs:read` and `logs:write` for itself, so neither opens a read; only an
 admin mints `logs:admin` or a service subject (`svc_`).
 
-| Call                                                                             | Needs                                   | Else                                            |
-| -------------------------------------------------------------------------------- | --------------------------------------- | ----------------------------------------------- |
-| `POST /events`                                                                   | `logs:write` and a `svc_` token subject | 403 `FORBIDDEN` "ingest needs a service token"  |
-| `GET /events`, `/traces/{agcid}`, `/stats`, `/hosts`, `/hosts/{host}/containers` | `logs:admin`                            | 403, `WWW-Authenticate: ... scope="logs:admin"` |
-| every `logs__*` tool                                                             | `logs:admin`                            | 403                                             |
+| Call                    | Needs                                   | Else                                            |
+| ----------------------- | --------------------------------------- | ----------------------------------------------- |
+| `POST /events`          | `logs:write` and a `svc_` token subject | 403 `FORBIDDEN` "ingest needs a service token"  |
+| `GET /events`, `/stats` | `logs:admin`                            | 403, `WWW-Authenticate: ... scope="logs:admin"` |
+| every `logs__*` tool    | `logs:admin`                            | 403                                             |
 
 ## Run
 
