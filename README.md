@@ -1,10 +1,65 @@
 # extension-logs
 
-The logs extension: every part's telemetry line (one JSON line per unit of work) lands in one
-ClickHouse `events` table; the api serves ingest and two reads (rows and groups, below), the mcp
-part the same two reads as tools, the worker a nightly `retention` check, the ui three widgets. Each
-part is only `create(ctx)`; the kit [`@agentage/extension`](https://github.com/agentage/platform)
-owns servers, `/health`, auth, the scheduler and the images.
+The logs extension of agentage. Every part of the estate sends its telemetry lines here. Operators
+and AI clients search them and read counts through an API, two MCP tools and three widgets.
+To run it locally, see [Run it locally](#run-it-locally).
+
+Words used here:
+
+- **estate**: the set of servers and extensions agentage runs. The `agentage/estate` repo describes it.
+- **kit**: `@agentage/extension`, the library that owns the servers, `/health`, auth and the scheduler.
+- **telemetry line** (an event): one JSON line for one unit of work. Its `kind` says what unit: `http`, `mcp`, `job`, `span`, `error`, `event` or `log`.
+- **agcid**: the id of one request. Every hop of the request logs the same `agcid`, so one search shows the whole path.
+- **store kind**: the type of database a part declares in `package.json`. Here it is `clickhouse`.
+- **subject** (`sub`): the account or service that made a call. A `svc_` subject is a service.
+
+Every line lands in one ClickHouse table, `events`. The api serves ingest and two reads (rows and
+groups). The mcp part serves the same reads as tools. The worker checks retention each night. The ui
+part serves three widgets.
+
+## Run it locally
+
+You need Node 22+, npm 10+, Docker, git and `jq`. Ports 4280 and 4281 must be free.
+
+```bash
+npm ci
+npm run verify                  # type-check, lint, format, tests, build
+npx agentage extension check    # PASS logs <version> conforms
+```
+
+The store tests (`src/**/*.clickhouse.test.ts`, `src/api/clickhouse.test.ts`) need a real ClickHouse
+26.8. They skip when `CLICKHOUSE_URL` is not set. CI sets it. To run them, start ClickHouse first:
+
+```bash
+docker run -d --name logs-store -p 8123:8123 -e CLICKHOUSE_USER=logs -e CLICKHOUSE_DB=logs \
+  -e CLICKHOUSE_PASSWORD=local clickhouse/clickhouse-server:26.8   # the user is `logs`, never `default`
+CLICKHOUSE_URL=http://logs:local@localhost:8123/logs npm run verify
+```
+
+### Run the whole extension with `up`
+
+`npx agentage extension up` does not run ClickHouse. This extension needs a store kind that `up`
+cannot start, so a plain `up` fails. You see this line:
+
+```text
+FAIL api /health status unavailable, needs ok or degraded
+```
+
+To run it, use the ClickHouse above and declare the `store-url` secret for this run only.
+The estate refuses a declared `store-url`, so never commit the edit. `172.17.0.1` is the docker host
+as the parts see it.
+
+1. `jq '.agentage.secrets = ["store-url"]' package.json > p.json && mv p.json package.json`
+2. `export AGENTAGE_SECRET_STORE_URL=http://logs:local@172.17.0.1:8123/logs`
+3. `npx agentage extension up` - `up` builds the images from `HEAD`, so the repo needs one commit; the tree can be dirty.
+4. `git checkout package.json` - the images are built, so undo the edit now.
+5. Call it with a token that has the extension's scope: `T=$(npx agentage extension token --scope logs:admin)`, then `curl -H "Authorization: Bearer $T" "localhost:4280/api/v1/events?limit=5"`.
+6. `npx agentage extension down` - one working copy holds ports 4280 and 4281 at a time.
+
+`agentage extension token` sets no subject, so its token gets 403 on `POST /events`. Ingest needs a
+`svc_` subject; the harness seed below mints one. Without a token a call answers 401.
+
+## Parts
 
 | Part   | Source                              | Serves                                                      |
 | ------ | ----------------------------------- | ----------------------------------------------------------- |
@@ -14,56 +69,79 @@ owns servers, `/health`, auth, the scheduler and the images.
 | ui     | [`src/ui`](src/ui/index.ts)         | the widgets `events`, `hosts`, `services`                   |
 | store  | `clickhouse` (manifest kind)        | one `events` table, [`src/lib/ddl.ts`](src/lib/ddl.ts)      |
 
-The line is `EventSchema` of `@agentage/extension/logs`; the ingest adds two rules (a `ts` inside
-the 30-day TTL, a subject that is an opaque id `[A-Za-z0-9_-]{1,64}`, never an email). The api, mcp and worker read the store connection
-from the file the estate mounts, `/run/secrets/store-url` (`http://logs:{pw}@logs_store:8123/logs`:
-user, password, host, database), on first use; `/health` of the api carries `checks.clickhouse`
-(a `SELECT 1`) and `checks.disk` (the free bytes of the events table's disks in `system.disks`,
-the estate's 1 GiB reserve included: under 1.5 GiB, or unreadable, `degraded`, never `unavailable`,
-so a full disk stops the ingest with 503 while the reads still answer), each bounded at 900 ms.
+The line is `EventSchema` of `@agentage/extension/logs`. The ingest adds two rules: a `ts` inside the
+30-day TTL, and a subject that is an opaque id `[A-Za-z0-9_-]{1,64}`, never an email.
+The api, mcp and worker read the store connection from `/run/secrets/store-url` on first use. The
+estate mounts that file (`http://logs:{pw}@logs_store:8123/logs`: user, password, host, database).
+`/health` of the api carries two checks, each bounded at 900 ms:
+
+- `checks.clickhouse`: a `SELECT 1`.
+- `checks.disk`: the free bytes of the events table's disks, with the estate's 1 GiB reserve included.
+  Under 1.5 GiB, or unreadable, is `degraded`, never `unavailable`. A full disk stops the ingest with
+  503 while the reads still answer.
+
+The full contracts are generated: [openapi.json](openapi.json) for the api and
+[logs.mcpc.json](logs.mcpc.json) for the tools. The sections below state only the rules a wrong
+guess would break.
+
+## Scopes
+
+Any account can mint `logs:read` and `logs:write` for itself, so neither opens a read; only an
+admin mints `logs:admin` or a service subject (`svc_`).
+
+| Call                    | Needs                                   | Else                                            |
+| ----------------------- | --------------------------------------- | ----------------------------------------------- |
+| `POST /events`          | `logs:write` and a `svc_` token subject | 403 `FORBIDDEN` "ingest needs a service token"  |
+| `GET /events`, `/stats` | `logs:admin`                            | 403, `WWW-Authenticate: ... scope="logs:admin"` |
+| every `logs__*` tool    | `logs:admin`                            | 403                                             |
 
 ## Ingest and the store's limits
 
-One `POST /events` batch (at most 1000 lines, 1 MB) is one ClickHouse insert. An answer is
-`accepted: N` only after the store has the rows; a failed insert answers 503 `UNAVAILABLE` (the
-store down, slow past 10 s, at one of its limits, or unable to write: no space, a read-only table)
-or 500 `INTERNAL`, never a count. A retry is
-safe: ClickHouse 26.8 inserts async by default and keeps no dedup window on a non-replicated
-MergeTree, so the api sets `non_replicated_deduplication_window = 1000` on the table and sends
-each batch with a token (the sha256 of its rows); the same batch again stores nothing, even when
-the first attempt landed after its 503. Two identical batches sent on purpose count once. The
-window counts inserts, not time: a retry more than 1000 inserts later is stored again. The api
-runs the `ALTER` only when `SHOW CREATE TABLE events` lacks the setting.
+`POST /api/v1/events` takes a bare JSON array of lines, not an object. It answers
+`{ accepted, rejected }`. A line that fails the schema or the two rules counts as `rejected`.
+One batch (at most 1000 lines, 1 MB) is one ClickHouse insert.
 
-Every read runs with `max_execution_time` 9 s, `max_memory_usage` 256 MB and `max_result_rows`
-10000 (throw, never a silent cut), so one wide query cannot take the 2 GB store; past a limit the
-read answers 503 `UNAVAILABLE` "The store is busy: narrow the query or retry". `/stats` pages
-(below); the `services` widget reads it through `logs__aggregate` and shows `truncated` in its
-caption.
+- `accepted: N` means the store has the rows. A failed insert answers 503 `UNAVAILABLE` or 500 `INTERNAL`, never a count.
+- 503 means the store is down, slow past 10 s, at one of its limits or unable to write (no space, a read-only table).
+- A retry is safe. The api sets `non_replicated_deduplication_window = 1000` on the table and sends each batch with a token (the sha256 of its rows). The same batch again stores nothing, even when the first attempt landed after its 503.
+- Two identical batches sent on purpose count once. The window counts inserts, not time: a retry more than 1000 inserts later is stored again.
+- The api runs the `ALTER` only when `SHOW CREATE TABLE events` lacks the setting.
+
+Every read runs with `max_execution_time` 9 s, `max_memory_usage` 256 MB and `max_result_rows` 10000.
+A read past a limit throws, never cuts silently. It answers 503 `UNAVAILABLE`: "The store is busy: narrow
+the query or retry". The `services` widget reads `/stats` through `logs__aggregate` and shows `truncated` in its caption.
+
+Retention: the table has a TTL of 30 days on `ts`. The worker job `retention` runs daily at 03:17 (timeout 60 s).
+It only checks the oldest partition and fails when it is older than 31 days. It never deletes.
 
 ## The two reads
 
-`GET /api/v1/events` (tool `logs__query`) answers rows; `GET /api/v1/stats` with `kind` (tool
-`logs__aggregate`) answers groups. Both take `kind` and the same filters: `since` and `until`
-(`15m`, `2h`, `7d` or an ISO time), `extension`, `part`, `host`, `level`, `route`, `status`, `agcid`,
-`sub`, `ok` (`true` or `false`), `name` (what `by=name` groups: the event name on `event`, `any` or no kind, the container name
-on `container`; another kind is a 400), `q` (text in msg, or an
-agcid); `/stats` also `user_type`.
+`GET /api/v1/events` (tool `logs__query`) answers rows. `GET /api/v1/stats` (tool `logs__aggregate`)
+answers groups, and requires `kind`; without it, or with `window`, it is a 400. Both take `kind` and these filters:
 
-- `/events` adds `order` (`desc`, newest first, or `asc`), `sort` (`ts`, or `ms` for the slowest
-  first, ties by time), `limit` (at most 1000) and `cursor` (bound to its query: sent with another kind, filter, sort or order it is a 400).
-- `/stats` adds `by` (a comma list), `bucket` (`1m`, `5m`, `1h`, `1d`), `under` (ms, `http` and `mcp`:
-  adds the measure `under`, the share of the group's rows at or under it), `sort` (a measure or a `by` name;
-  any other name is a 400 that lists the allowed ones), `order`, `limit` (100, at most 1000) and
-  `cursor`. A group without a value sorts last. `meta.nextCursor` pins the window of page 1, so
-  every page is cut from the same rows; a cursor sent with another kind, `by`, sort, order or filter
-  is a 400. Page 1 ends 5 s before now (unless `until` is given), so a late row cannot move a group
-  between pages. A `bucket` draws at most 1500 steps, and a call groups at most 100000 groups (past
-  it, 503 busy). `kind` is required: without it, or with `window` (the 0.2 form, gone in 0.5),
-  `/stats` is a 400. `kind` also takes the lists whose kinds share measures,
-  `http,mcp` (one number over both, quantiles and users over the union) and `log,event`, in either
-  order (another list is a 400 that names the allowed ones), and `any` (every row: count, firstSeen, lastSeen); both add `kind` to `by`.
-  Quantiles, averages and percents answer at most 2 decimals, availability and `under` 4.
+- `since` and `until`: `15m`, `2h`, `7d` or an ISO time.
+- `extension`, `part`, `host`, `level`, `route`, `status`, `agcid`, `sub`, `ok` (`true` or `false`).
+- `name`: what `by=name` groups. It is the event name on `event`, `any` or no kind, and the container name on `container`. Another kind is a 400.
+- `q`: text in `msg`, or an agcid. `/stats` also takes `user_type`.
+
+`/events` adds:
+
+- `order`: `desc` (newest first) or `asc`.
+- `sort`: `ts`, or `ms` for the slowest first (ties by time).
+- `limit`: at most 1000.
+- `cursor`: bound to its query. With another kind, filter, sort or order it is a 400.
+
+`/stats` adds:
+
+- `by`: a comma list (below).
+- `bucket`: `1m`, `5m`, `1h` or `1d`. It draws at most 1500 steps.
+- `under`: ms, on `http` and `mcp`. It adds the measure `under`, the share of the group's rows at or under it.
+- `sort`: a measure or a `by` name. Any other name is a 400 that lists the allowed ones.
+- `order`, `limit` (100, at most 1000) and `cursor`. A group without a value sorts last.
+- `meta.nextCursor` pins the window of page 1, so every page is cut from the same rows. A cursor sent with another kind, `by`, sort, order or filter is a 400.
+- Page 1 ends 5 s before now (unless `until` is given), so a late row cannot move a group between pages. A call groups at most 100000 groups; past that it answers 503 busy.
+- `kind` also takes `http,mcp` (one number over both) and `log,event`, in either order, and `any` (every row: count, firstSeen, lastSeen). Another list is a 400 that names the allowed ones. A list and `any` add `kind` to `by`.
+- Quantiles, averages and percents answer at most 2 decimals; availability and `under` 4.
 
 | kind                                  | `/stats` measures, per group                                                                                  |
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
@@ -90,65 +168,25 @@ default window is 24 h (`host` 1 h, `container` 5 min); the default sort is the 
 | Question                               | Call                                                              |
 | -------------------------------------- | ----------------------------------------------------------------- |
 | Errors that mention a timeout, 2 hours | `/events?level=error&q=timeout&since=2h`                          |
-| One request, every hop in time order   | `/events?agcid=0193a1f0...&order=asc&since=30d`                   |
+| One request, every hop in time order   | `/events?agcid=<agcid>&order=asc&since=30d`                       |
 | Reliability per route, a day           | `/stats?kind=http&by=extension,part,route&since=24h`              |
 | Worst availability first               | `/stats?kind=http&by=extension,route&sort=availability&order=asc` |
-| Responses of one extension by status   | `/stats?kind=http&by=status&extension=market`                     |
-| Errors grouped by type, newest first   | `/stats?kind=error&by=type,extension&sort=lastSeen`               |
-| Containers of one machine              | `/stats?kind=container&host=next-1&by=name`                       |
 | Cpu of each machine in 5 minute steps  | `/stats?kind=host&by=host&bucket=5m&since=6h`                     |
-| Availability of one extension per hour | `/stats?kind=http&extension=probe&bucket=1h&since=24h`            |
-| Requests and tool calls as one number  | `/stats?kind=http,mcp&by=extension&since=24h`                     |
-| Rows per kind                          | `/stats?kind=any&by=kind`                                         |
 | Share under 300 ms per route, worst    | `/stats?kind=http&by=route&under=300&sort=under&order=asc`        |
-| Traffic by type                        | `/stats?kind=http&by=user_type`                                   |
-| Errors by fingerprint                  | `/stats?kind=error&by=fingerprint`                                |
-| Backup runs per day                    | `/stats?kind=event&name=backup.run&bucket=1d&since=14d`           |
-| The slowest failed requests            | `/events?kind=http&ok=false&sort=ms`                              |
-
-## Scopes
-
-Any account can mint `logs:read` and `logs:write` for itself, so neither opens a read; only an
-admin mints `logs:admin` or a service subject (`svc_`).
-
-| Call                    | Needs                                   | Else                                            |
-| ----------------------- | --------------------------------------- | ----------------------------------------------- |
-| `POST /events`          | `logs:write` and a `svc_` token subject | 403 `FORBIDDEN` "ingest needs a service token"  |
-| `GET /events`, `/stats` | `logs:admin`                            | 403, `WWW-Authenticate: ... scope="logs:admin"` |
-| every `logs__*` tool    | `logs:admin`                            | 403                                             |
-
-## Run
-
-Needs Node 22+, npm 10+, Docker, `git` and `jq`.
-
-The store tests (`src/**/*.clickhouse.test.ts`, `src/api/clickhouse.test.ts`) run against a real
-ClickHouse 26.8 and skip without `CLICKHOUSE_URL`, as `ci.yml` sets it; start one first.
-
-```bash
-docker run -d --name logs-store -p 8123:8123 -e CLICKHOUSE_USER=logs -e CLICKHOUSE_DB=logs \
-  -e CLICKHOUSE_PASSWORD=local clickhouse/clickhouse-server:26.8   # the estate's user, never default
-npm ci
-CLICKHOUSE_URL=http://logs:local@localhost:8123/logs npm run verify   # type-check, lint, format, tests, build
-npx agentage extension check             # PASS logs {version} conforms
-```
-
-`up` runs no ClickHouse and mounts only declared secrets, while the estate refuses a declared
-`store-url`. So a local run uses the ClickHouse above and declares `store-url` for that run only,
-as `ci.yml` does; never commit that line. `172.17.0.1` is the docker host as the parts see it.
-
-```bash
-jq '.agentage.secrets = ["store-url"]' package.json > p.json && mv p.json package.json
-AGENTAGE_SECRET_STORE_URL=http://logs:local@172.17.0.1:8123/logs npx agentage extension up
-git checkout package.json                # after up: the images are built
-npx agentage extension down              # when done; one working copy holds 4280 and 4281 at a time
-```
+| Rows per kind                          | `/stats?kind=any&by=kind`                                         |
+| Requests and tool calls as one number  | `/stats?kind=http,mcp&by=extension&since=24h`                     |
 
 ## Release
 
-Set the version, `npx agentage extension check --write`, merge, push the tag `v{version}` on master.
-`release.yml` pushes the part images to `ghcr.io/agentage/logs-{part}` and attaches
-`agentage-extension.json` (the images by digest) to the GitHub release; the estate pins those.
-The package is `private`: no npm publish.
+1. Set the version in `package.json`.
+2. Run `npx agentage extension check --write`.
+3. Merge to master.
+4. Push the tag `v<version>` on master.
+
+`release.yml` runs `agentage extension release`. It refuses the starting-point id, a commit off
+master and a tag that is not the version. It keeps a released version. It pushes the part images to
+`ghcr.io/agentage/logs-{part}` and attaches `agentage-extension.json` (the images by digest) to the
+GitHub release. The estate pins those. The package is `private`: no npm publish.
 
 ## Widgets in the harness
 
@@ -157,7 +195,7 @@ The ui part serves the widget kit's harness page under `up`; the seed posts 100 
 cpu 92) with their containers, and the services rows (one red by availability, one by p95).
 
 ```bash
-npx agentage extension up                # with ClickHouse and store-url, see Run
+npx agentage extension up                # with ClickHouse and store-url, see Run it locally
 npm run harness:seed                     # LOGS_URL and LOGS_ISSUER override 4280 and 4281
 echo "http://localhost:4280/ui/$(jq -r .version package.json)/harness.html?widget=events&scope=logs:admin"
 ```
