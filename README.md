@@ -51,7 +51,7 @@ as the parts see it.
 
 1. `jq '.agentage.secrets = ["store-url"]' package.json > p.json && mv p.json package.json`
 2. `export AGENTAGE_SECRET_STORE_URL=http://logs:local@172.17.0.1:8123/logs`
-3. `npx agentage extension up` - `up` needs a commit and builds the images from it.
+3. `npx agentage extension up` - `up` builds the images from `HEAD`, so the repo needs one commit; the tree can be dirty.
 4. `git checkout package.json` - the images are built, so undo the edit now.
 5. Call it with a token that has the extension's scope: `T=$(npx agentage extension token --scope logs:admin)`, then `curl -H "Authorization: Bearer $T" "localhost:4280/api/v1/events?limit=5"`.
 6. `npx agentage extension down` - one working copy holds ports 4280 and 4281 at a time.
@@ -171,6 +171,10 @@ default window is 24 h (`host` 1 h, `container` 5 min); the default sort is the 
 | One request, every hop in time order   | `/events?agcid=<agcid>&order=asc&since=30d`                       |
 | Reliability per route, a day           | `/stats?kind=http&by=extension,part,route&since=24h`              |
 | Worst availability first               | `/stats?kind=http&by=extension,route&sort=availability&order=asc` |
+| Cpu of each machine in 5 minute steps  | `/stats?kind=host&by=host&bucket=5m&since=6h`                     |
+| Share under 300 ms per route, worst    | `/stats?kind=http&by=route&under=300&sort=under&order=asc`        |
+| Rows per kind                          | `/stats?kind=any&by=kind`                                         |
+| Requests and tool calls as one number  | `/stats?kind=http,mcp&by=extension&since=24h`                     |
 
 ## Release
 
