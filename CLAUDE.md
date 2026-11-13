@@ -9,7 +9,7 @@ This file only adds what the tree does not say.
 ## Rules
 
 - A part module exports `create(ctx)` only; `src/ui/index.ts` exports `widgets` only. Never
-  `listen()`, the `process` global, a token check or an absolute agentage URL in `src/`.
+  `listen()`, the `process` global (or an import of it), an absolute agentage URL, a symlink or a dependency on another extension in `src/`. The kit checks the token: a part needs none.
 - A part imports only its own folder and `src/lib/` (`src/manifest.test.ts` refuses a crossing).
 - `openapi.json` and `logs.mcpc.json` are committed contracts: after a route or tool change run
   `npm run build`, `npx agentage extension check --write`, then `npm run format`.
