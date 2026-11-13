@@ -25,8 +25,7 @@ A full disk stops the ingest with 503. The reads still answer.
 
 A line is `EventSchema` of `@agentage/extension/logs`. The ingest adds two rules:
 
-- `ts` is inside the 30-day TTL (time to live) of the table.
-- `ts` is at most one hour in the future.
+- `ts` is inside the 30-day TTL (time to live) of the table and at most one hour in the future.
 - The subject is an opaque id `[A-Za-z0-9_-]{1,64}`, never an email.
 
 `POST /api/v1/events` takes a bare JSON array of lines, not an object. It answers
