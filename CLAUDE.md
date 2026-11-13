@@ -6,6 +6,20 @@ in the README of [`@agentage/extension`](https://www.npmjs.com/package/@agentage
 the shape of an extension is [agentage/extension-probe](https://github.com/agentage/extension-probe).
 This file only adds what the tree does not say.
 
+## Where facts live
+
+- Routes, scopes, status codes: `openapi.json` (generated; never edit by hand).
+- MCP tools and their inputs: `logs.mcpc.json` (generated).
+- Which scope each call needs: `README.md` "Scopes".
+- Ingest body, size limits and the store's limits: `README.md` "Ingest and the store's limits".
+- Filters, `kind` and the stats groups: `README.md` "The two reads".
+- Run it locally, ClickHouse for the store tests, `up`: `README.md` "Run it locally".
+- The events table (there is no `migrations/`): `src/lib/ddl.ts`.
+- CI jobs and the gate floor (`MIN_EXECUTED`): `.github/workflows/ci.yml`.
+- Release rules and refusals: `.github/workflows/release.yml`, steps in `README.md` "Release".
+
+Read the file named here before you read `src/`.
+
 ## Rules
 
 - A part module exports `create(ctx)` only; `src/ui/index.ts` exports `widgets` only. Never
