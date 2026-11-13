@@ -1,7 +1,7 @@
 # CLAUDE.md - agentage/extension-logs
 
 The logs extension of agentage (public repo; the npm package is `private`). The human guide is
-[README.md](README.md): words, local run, API rules, release. The kit rules are
+[README.md](README.md): words, local run, API rules, release; depth in `docs/`. The kit rules are
 in the README of [`@agentage/extension`](https://www.npmjs.com/package/@agentage/extension);
 the shape of an extension is [agentage/extension-probe](https://github.com/agentage/extension-probe).
 This file only adds what the tree does not say.
@@ -11,9 +11,9 @@ This file only adds what the tree does not say.
 - Routes, scopes, status codes: `openapi.json` (generated; never edit by hand).
 - MCP tools and their inputs: `logs.mcpc.json` (generated).
 - Which scope each call needs: `README.md` "Scopes".
-- Ingest body, size limits and the store's limits: `README.md` "Ingest and the store's limits".
-- Filters, `kind` and the stats groups: `README.md` "The two reads".
-- Run it locally, ClickHouse for the store tests, `up`: `README.md` "Run it locally".
+- Ingest body, size limits and the store's limits: `docs/api.md` "Ingest" and "The store's limits".
+- Filters, `kind` and the stats groups: `docs/api.md` "Reads".
+- Run it locally, ClickHouse for the store tests: `README.md` "Run it locally"; `up` and the widget harness: `docs/run-locally.md`.
 - The events table (there is no `migrations/`): `src/lib/ddl.ts`.
 - CI jobs and the gate floor (`MIN_EXECUTED`): `.github/workflows/ci.yml`.
 - Release rules and refusals: `.github/workflows/release.yml`, steps in `README.md` "Release".
@@ -31,7 +31,7 @@ Read the file named here before you read `src/`.
   starting-point id, a commit off master and a tag that is not the version
   (`.github/workflows/release.yml`).
 - The store connection is the file the estate mounts, `/run/secrets/store-url`
-  (`src/lib/connection.ts`); never commit `store-url` in `agentage.secrets` (the estate refuses it). The README's local run adds it for one run and undoes it.
+  (`src/lib/connection.ts`); never commit `store-url` in `agentage.secrets` (the estate refuses it). The local run in `docs/run-locally.md` adds it for one run and undoes it.
 
 ## Commands
 
