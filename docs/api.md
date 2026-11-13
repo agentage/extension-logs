@@ -26,6 +26,7 @@ A full disk stops the ingest with 503. The reads still answer.
 A line is `EventSchema` of `@agentage/extension/logs`. The ingest adds two rules:
 
 - `ts` is inside the 30-day TTL (time to live) of the table.
+- `ts` is at most one hour in the future.
 - The subject is an opaque id `[A-Za-z0-9_-]{1,64}`, never an email.
 
 `POST /api/v1/events` takes a bare JSON array of lines, not an object. It answers
@@ -129,7 +130,8 @@ Availability is the share of requests that did not fail.
 
 - An `http` row with a 5xx status is a failure. At the edge, only 502 to 504 are failures.
 - An `mcp` row fails when `ok` is false.
-- A 429 does not count as a request.
+- An `http` 429 does not count as a request. At the edge, only 502 to 504 rows count as requests.
+  Every `mcp` row is a request.
 - Under 50 requests, availability is null.
 - Test and service traffic is left out of `http` and `mcp`, unless you filter or group by
   `user_type`.

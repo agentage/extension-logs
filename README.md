@@ -69,7 +69,7 @@ a call answers 401.
 - `POST /api/v1/events` takes a bare JSON array of lines, not an object.
 - It answers `{ accepted, rejected }`. A line that fails the schema or the ingest rules counts as `rejected`.
 - One batch holds at most 1000 lines and 1 MB.
-- A retry is safe: the same batch is not stored twice.
+- A retry is safe: the same batch is not stored twice within the next 1000 inserts.
 - A read past the store's limits answers 503 `UNAVAILABLE`.
 - Rows live 30 days. The worker only checks this; it never deletes.
 
@@ -96,8 +96,8 @@ More: [docs/api.md](docs/api.md#reads)
 
 ## Widgets in the harness
 
-Under `up`, the ui part serves a harness page for each widget. `npm run harness:seed` posts
-sample lines to it, and `npm run test:e2e` runs the widget spec.
+Under `up`, the ui part serves the widget kit's harness page. `npm run harness:seed` posts sample
+lines to the api, and `npm run test:e2e` runs the widget spec.
 
 More: [docs/run-locally.md](docs/run-locally.md#widgets)
 
@@ -115,8 +115,8 @@ GitHub release. The estate pins those. The package is `private`: no npm publish.
 
 ## Documentation
 
-- [docs/run-locally.md](docs/run-locally.md): the full local run with `up`, and the widget harness.
-- [docs/api.md](docs/api.md): the store connection, `/health`, ingest, the store's limits and the two reads.
+- [docs/run-locally.md](docs/run-locally.md): the full run with `up` and the widget harness.
+- [docs/api.md](docs/api.md): store connection, `/health`, ingest, store limits, retention, reads.
 
 ## License
 
