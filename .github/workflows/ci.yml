@@ -93,7 +93,7 @@ jobs:
         run: docker run -d --name logs-store -p 8123:8123 -e CLICKHOUSE_USER=logs -e CLICKHOUSE_DB=logs -e CLICKHOUSE_PASSWORD=local clickhouse/clickhouse-server:26.8
 
       # The estate mounts /run/secrets/store-url and refuses it declared; up mounts declared secrets only.
-      - name: Declare store-url for this run only (README, Run)
+      - name: Declare store-url for this run only (docs/run-locally.md)
         run: jq '.agentage.secrets = ["store-url"]' package.json > p.json && mv p.json package.json
 
       # The cli and its kit come from this lockfile: a cli or kit patch needs a commit here.

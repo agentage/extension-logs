@@ -21,7 +21,7 @@ export interface EventsStore {
   query<T = Row>(sql: string, params?: Params): Promise<T[]>;
 }
 
-// 26.8 inserts async by default; the token makes a retried batch a no-op (README, Ingest).
+// 26.8 inserts async by default; the token makes a retried batch a no-op (docs/api.md, Ingest).
 const writes = (token: string) =>
   ({
     format: 'JSONEachRow',
