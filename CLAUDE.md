@@ -8,15 +8,17 @@ This file only adds what the tree does not say.
 
 ## Where facts live
 
-- Routes, scopes, status codes: `openapi.json` (generated; never edit by hand).
-- MCP tools and their inputs: `logs.mcpc.json` (generated).
-- Which scope each call needs: `README.md` "Scopes".
-- Ingest body, size limits and the store's limits: `docs/api.md` "Ingest" and "The store's limits".
-- Filters, `kind` and the stats groups: `docs/api.md` "Reads".
-- Run it locally, ClickHouse for the store tests: `README.md` "Run it locally"; `up` and the widget harness: `docs/run-locally.md`.
+- Ingest route, body, scope, size limits: `docs/api.md` "Ingest"; proof `src/api/ingest.ts`, `src/api/rows.ts`.
+- Reads: filters, `kind`, measures, groups, availability, scope: `docs/api.md` "Reads"; proof `src/lib/kinds.ts`.
+- Which scope each call needs, in one table: `README.md` "Scopes"; proof `openapi.json`.
+- Store connection and `/health`: `docs/api.md` "Store connection", "Health"; proof `src/lib/connection.ts`, `src/lib/store.ts`.
+- The store's read limits: `docs/api.md` "The store's limits"; proof `src/lib/store.ts`.
+- Retention (TTL, nightly check): `docs/api.md` "Retention"; proof `src/worker/retention.ts`, `src/lib/ddl.ts`.
+- Contracts: `openapi.json` (routes, status codes) and `logs.mcpc.json` (tools); generated, never edit by hand.
+- Local run, store tests: `README.md` "Run it locally"; `up`, widget harness: `docs/run-locally.md`.
 - The events table (there is no `migrations/`): `src/lib/ddl.ts`.
 - CI jobs and the gate floor (`MIN_EXECUTED`): `.github/workflows/ci.yml`.
-- Release rules and refusals: `.github/workflows/release.yml`, steps in `README.md` "Release".
+- Release steps and refusals: `README.md` "Release"; proof `.github/workflows/release.yml`.
 
 Read the file named here before you read `src/`.
 

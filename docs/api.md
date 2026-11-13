@@ -23,6 +23,8 @@ A full disk stops the ingest with 503. The reads still answer.
 
 ## Ingest
 
+`POST /api/v1/events` needs the scope `logs:write` and a `svc_` token subject. Else it answers 403.
+
 A line is `EventSchema` of `@agentage/extension/logs`. The ingest adds two rules:
 
 - `ts` is inside the 30-day TTL (time to live) of the table and at most one hour in the future.
@@ -76,12 +78,16 @@ Both reads take `kind` and these filters:
 
 ### Options of `/events`
 
+`/events` and the tool `logs__query` need the scope `logs:admin`. Else they answer 403.
+
 - `order`: `desc` (newest first) or `asc`.
 - `sort`: `ts`, or `ms` for the slowest first. Ties sort by time.
 - `limit`: at most 1000.
 - `cursor`: bound to its query. With another kind, filter, sort or order it is a 400.
 
 ### Options of `/stats`
+
+`/stats` and the tool `logs__aggregate` need the scope `logs:admin`. Else they answer 403.
 
 - `by`: a comma list (see [Groups](#groups)).
 - `bucket`: `1m`, `5m`, `1h` or `1d`. It draws at most 1500 steps.
