@@ -31,8 +31,31 @@ A line is `EventSchema` of `@agentage/extension/logs`. The ingest adds two rules
 - The subject is an opaque id `[A-Za-z0-9_-]{1,64}`, never an email.
 
 `POST /api/v1/events` takes a bare JSON array of lines, not an object. It answers
-`{ accepted, rejected }`. A line that fails the schema or the two rules counts as `rejected`.
+`{ accepted, rejected }` inside the kit's envelope, as counts: `{ "success": true, "data": { "accepted": 2, "rejected": 0 } }`. A line that fails the schema or the two rules counts as `rejected`.
 One batch holds at most 1000 lines and 1 MB. One batch is one ClickHouse insert.
+
+A request body with one line (the `log` line of `src/api/lines.fixture.ts`; `src/api/ingest.test.ts:43-44` posts it with an old line and gets `accepted: 1, rejected: 1`). Replace `ts` with the current time. The ingest rejects a `ts` older than 30 days or more than one hour ahead.
+
+```json
+[
+  {
+    "ts": "<now, ISO 8601>",
+    "level": "info",
+    "kind": "log",
+    "extension": "probe",
+    "part": "api",
+    "version": "0.6.0",
+    "host": "next-1",
+    "agcid": "0193a1f0c3d18b5e9f3a6c4d0e8b7f03",
+    "sub": "usr_7f3a",
+    "session": "tok_01JC9V3K7Q",
+    "user_type": "agent",
+    "client": "claude-code",
+    "msg": "emit 1",
+    "fields": {}
+  }
+]
+```
 
 - `accepted: N` means the store has the rows. A failed insert answers 503 `UNAVAILABLE` or 500
   `INTERNAL`, never a count.
@@ -75,6 +98,14 @@ Both reads take `kind` and these filters:
   `container`, it is the container name. With another kind it is a 400.
 - `q`: text in `msg`, or an agcid.
 - `/stats` also takes `user_type`.
+
+### More examples of `/stats`
+
+| Question                              | Call                                                       |
+| ------------------------------------- | ---------------------------------------------------------- |
+| Share under 300 ms per route, worst   | `/stats?kind=http&by=route&under=300&sort=under&order=asc` |
+| Rows per kind                         | `/stats?kind=any&by=kind`                                  |
+| Requests and tool calls as one number | `/stats?kind=http,mcp&by=extension&since=24h`              |
 
 ### Options of `/events`
 
