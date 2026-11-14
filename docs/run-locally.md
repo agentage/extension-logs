@@ -33,6 +33,12 @@ the docker host as the parts see it.
 `POST /events`. Ingest needs a `svc_` subject. The harness seed below mints one. Without a token a
 call answers 401.
 
+## What CI runs
+
+The job `Verify` runs `npm ci`, `npm run verify` and `agentage extension check`. The job `up and the
+e2e gate on local` starts ClickHouse 26.8, declares `store-url`, runs `up`, posts a line through the
+gateway, runs `npm run test:e2e`, then runs the e2e gate of agentage/e2e (`.github/workflows/ci.yml`).
+
 ## Widgets
 
 Under `up`, the ui part serves the harness page of the widget kit. The seed posts sample data:

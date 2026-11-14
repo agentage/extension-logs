@@ -30,7 +30,7 @@ docker run -d --name logs-store -p 8123:8123 -e CLICKHOUSE_USER=logs -e CLICKHOU
 CLICKHOUSE_URL=http://logs:local@localhost:8123/logs npm run verify
 ```
 
-`npx agentage extension up` alone fails: it does not start ClickHouse. To run every part, see
+`npx agentage extension up` alone fails: it does not start ClickHouse. CI also runs `agentage extension check`, then `up` and the e2e gate. To run every part, see
 [docs/run-locally.md](docs/run-locally.md#run-the-whole-extension-with-up).
 
 ## Parts
@@ -67,7 +67,7 @@ a call answers 401.
 ## Ingest
 
 - `POST /api/v1/events` takes a bare JSON array of lines, not an object.
-- It answers `{ accepted, rejected }`. A line that fails the schema or the ingest rules counts as `rejected`.
+- It answers `{ "success": true, "data": { "accepted": 2, "rejected": 0 } }`. A line that fails the schema or the ingest rules counts as `rejected`.
 - The rules: `ts` is at most 30 days old and at most one hour ahead; `sub` is an opaque id, never an email.
 - One batch holds at most 1000 lines and 1 MB.
 - A retry is safe: the same batch is not stored twice within the next 1000 inserts.
@@ -89,9 +89,6 @@ More: [docs/api.md](docs/api.md#ingest)
 | Reliability per route, a day           | `/stats?kind=http&by=extension,part,route&since=24h`              |
 | Worst availability first               | `/stats?kind=http&by=extension,route&sort=availability&order=asc` |
 | Cpu of each machine in 5 minute steps  | `/stats?kind=host&by=host&bucket=5m&since=6h`                     |
-| Share under 300 ms per route, worst    | `/stats?kind=http&by=route&under=300&sort=under&order=asc`        |
-| Rows per kind                          | `/stats?kind=any&by=kind`                                         |
-| Requests and tool calls as one number  | `/stats?kind=http,mcp&by=extension&since=24h`                     |
 
 More: [docs/api.md](docs/api.md#reads)
 
@@ -102,10 +99,10 @@ More: [docs/api.md](docs/api.md#reads)
 3. Merge to master.
 4. Push the tag `v<version>` on master.
 
-`release.yml` runs `agentage extension release`. It refuses the id `template`, a commit off
+`release.yml` runs `npm ci --ignore-scripts`, `npm run verify`, then `agentage extension release` of the cli the lockfile pins. It refuses the id `template`, a commit off
 master and a tag that is not the version. It pushes the part images to
-`ghcr.io/agentage/logs-{part}` and attaches `agentage-extension.json` (the images by digest) to the
-GitHub release. The package is `private`: no npm publish.
+`ghcr.io/agentage/logs-{part}` and attaches `agentage-extension.json` to the
+GitHub release. The package is `private`: no npm.
 
 ## Documentation
 
