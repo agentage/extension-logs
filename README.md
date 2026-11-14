@@ -4,10 +4,9 @@ The logs extension of agentage. Services and extensions send it one JSON line fo
 a request, a tool call, a job or an error. Operators and AI clients search those lines and read counts through an API, two MCP tools
 and three widgets. The store is one ClickHouse table, `events`.
 
-Words used here:
+Words:
 
-- **estate**: the set of servers and extensions agentage runs. The `agentage/estate` repo describes it.
-- **part**: one folder in `src/` (`api`, `mcp`, `worker` or `ui`). Each part ships as its own image.
+- **estate**: the set of servers and extensions agentage runs.
 - **telemetry line** (an event): one JSON line for one unit of work. Its `kind` says what unit: `http`, `mcp`, `job`, `span`, `error`, `event` or `log`.
 - **agcid**: the id of one request. Every hop of the request logs the same `agcid`, so one search shows the whole path.
 - **subject** (`sub`): the account or service that made a call. A `svc_` subject is a service.
@@ -35,6 +34,8 @@ CLICKHOUSE_URL=http://logs:local@localhost:8123/logs npm run verify
 [docs/run-locally.md](docs/run-locally.md#run-the-whole-extension-with-up).
 
 ## Parts
+
+A part is one folder in `src/`. Each part ships as its own image.
 
 | Part   | Source                              | Serves                                                      |
 | ------ | ----------------------------------- | ----------------------------------------------------------- |
@@ -65,7 +66,12 @@ a call answers 401.
 
 ## Ingest
 
-- `POST /api/v1/events` takes a JSON array of up to 1000 lines and answers `{ accepted, rejected }`.
+- `POST /api/v1/events` takes a bare JSON array of lines, not an object.
+- It answers `{ accepted, rejected }`. A line that fails the schema or the ingest rules counts as `rejected`.
+- The rules: `ts` is at most 30 days old and at most one hour ahead; `sub` is an opaque id, never an email.
+- One batch holds at most 1000 lines and 1 MB.
+- A retry is safe: the same batch is not stored twice within the next 1000 inserts.
+- A failed insert answers 503 `UNAVAILABLE` or 500, never a count.
 - Rows live 30 days. The worker only checks this; it never deletes.
 
 More: [docs/api.md](docs/api.md#ingest)
@@ -88,13 +94,6 @@ More: [docs/api.md](docs/api.md#ingest)
 | Requests and tool calls as one number  | `/stats?kind=http,mcp&by=extension&since=24h`                     |
 
 More: [docs/api.md](docs/api.md#reads)
-
-## Widgets in the harness
-
-Under `up`, the ui part serves the widget kit's harness page. `npm run harness:seed` posts sample
-lines to the api, and `npm run test:e2e` runs the widget spec.
-
-More: [docs/run-locally.md](docs/run-locally.md#widgets)
 
 ## Release
 
