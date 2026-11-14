@@ -35,9 +35,15 @@ call answers 401.
 
 ## What CI runs
 
-The job `Verify` runs `npm ci`, `npm run verify` and `agentage extension check`. The job `up and the
+The job `Verify` runs `npm ci`, `npm run verify` and `agentage extension check`. It sets
+`CLICKHOUSE_URL` to a ClickHouse 26.8 service, so the store tests run. The job `up and the
 e2e gate on local` starts ClickHouse 26.8, declares `store-url`, runs `up`, posts a line through the
 gateway, runs `npm run test:e2e`, then runs the e2e gate of agentage/e2e (`.github/workflows/ci.yml`).
+
+## Release
+
+A released version is kept: a release never rebuilds it. The release record `agentage-extension.json`
+names the images by digest.
 
 ## Widgets
 

@@ -34,12 +34,12 @@ A line is `EventSchema` of `@agentage/extension/logs`. The ingest adds two rules
 `{ accepted, rejected }` inside the kit's envelope, as counts: `{ "success": true, "data": { "accepted": 2, "rejected": 0 } }`. A line that fails the schema or the two rules counts as `rejected`.
 One batch holds at most 1000 lines and 1 MB. One batch is one ClickHouse insert.
 
-A request body with one line (the `log` line of `src/api/lines.fixture.ts`; `src/api/ingest.test.ts` posts it and gets `accepted: 1`). Its `ts` must be inside the window above:
+A request body with one line (the `log` line of `src/api/lines.fixture.ts`; `src/api/ingest.test.ts:43-44` posts it with an old line and gets `accepted: 1, rejected: 1`). Replace `ts` with the current time. The ingest rejects a `ts` older than 30 days or more than one hour ahead.
 
 ```json
 [
   {
-    "ts": "2026-11-14T01:00:00.000Z",
+    "ts": "<now, ISO 8601>",
     "level": "info",
     "kind": "log",
     "extension": "probe",
