@@ -1,7 +1,7 @@
 # extension-logs
 
-The logs extension of agentage. Services and extensions send it one JSON line for each request, job
-or error. Operators and AI clients search those lines and read counts through an API, two MCP tools
+The logs extension of agentage. Services and extensions send it one JSON line for each unit of work: a
+request, a job or an error. Operators and AI clients search those lines and read counts through an API, two MCP tools
 and three widgets. The store is one ClickHouse table, `events`.
 
 Words used here:
@@ -63,7 +63,7 @@ can get `logs:admin` or a service token (`svc_`).
 `agentage extension token` sets no subject, so its token gets 403 on `POST /events`. Without a token
 a call answers 401.
 
-## Ingest and the store's limits
+## Ingest
 
 - `POST /api/v1/events` takes a JSON array of up to 1000 lines and answers `{ accepted, rejected }`.
 - Rows live 30 days. The worker only checks this; it never deletes.
