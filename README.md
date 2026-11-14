@@ -1,7 +1,7 @@
 # extension-logs
 
-The logs extension of agentage. Services and extensions send it one JSON line for each unit of work: a
-request, a job or an error. Operators and AI clients search those lines and read counts through an API, two MCP tools
+The logs extension of agentage. Services and extensions send it one JSON line for each unit of work, such as
+a request, a tool call, a job or an error. Operators and AI clients search those lines and read counts through an API, two MCP tools
 and three widgets. The store is one ClickHouse table, `events`.
 
 Words used here:
