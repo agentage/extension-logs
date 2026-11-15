@@ -11,6 +11,7 @@ export const FILTERS = {
   agcid: 'agcid = {agcid:FixedString(32)}',
   host: 'host = {host:String}',
   sub: 'sub = {sub:String}',
+  apphost: "ifNull(CAST(fields.agentage.apphost, 'Nullable(String)'), '') = {apphost:String}",
   route: 'route = {route:String}',
   status: 'status = {status:UInt16}',
   user_type: 'user_type = {user_type:String}',

@@ -109,6 +109,9 @@ describe('the read routes', () => {
     `/events?agcid=${'a'.repeat(33)}`,
     '/events?host=a%2Fb',
     '/events?host=..',
+    '/events?apphost=Stub_Key',
+    '/events?apphost=a%2Fb',
+    '/stats?kind=http&apphost=1stub',
   ])('refuses %s with 400 VALIDATION_ERROR', async (path) => {
     const res = await get(path, as('logs:admin'));
     expect(res.status).toBe(400);
@@ -122,6 +125,16 @@ describe('the read routes', () => {
       expect((await get(path, as('logs:admin'))).status).toBe(200);
     }
   );
+
+  it('apphost filters on fields.agentage.apphost, with the value as a parameter', async () => {
+    expect((await get('/events?apphost=stub', as('logs:admin'))).status).toBe(200);
+    expect((await get('/stats?kind=http&apphost=stub', as('logs:admin'))).status).toBe(200);
+    for (const [sql, params] of query.mock.calls as unknown as [string, { apphost: string }][]) {
+      expect(sql).toContain('fields.agentage.apphost');
+      expect(params.apphost).toBe('stub');
+    }
+    expect(query).toHaveBeenCalledTimes(2);
+  });
 
   it('binds the /events cursor to its query: the same query 200, another order or kind 400', async () => {
     const page = { t: '2026-11-10 09:12:03.412', i: row.id };

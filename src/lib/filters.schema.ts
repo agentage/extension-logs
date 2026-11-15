@@ -33,6 +33,8 @@ export const Agcid = z.string().regex(/^[0-9a-f]{32}$/);
 export const Host = z.string().regex(/^(?!.*\.\.)[A-Za-z0-9][\w.-]{0,252}$/);
 // The ingest's subject rule: an opaque id, never an email.
 export const Sub = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
+// The kit's secret-name rule: lowercase, digits, hyphens, no underscore; also the app host name.
+export const AppHost = z.string().regex(/^[a-z][a-z0-9-]{0,47}$/);
 export const Order = z.enum(['desc', 'asc']);
 
 // The filters both reads take, besides kind and the window.
@@ -40,6 +42,7 @@ export const FILTER_FIELDS = {
   ...{ q: z.string().min(1).max(200).optional(), level: z.enum(LEVELS).optional() },
   ...{ extension: name.optional(), part: name.optional(), host: Host.optional() },
   ...{ agcid: Agcid.optional(), sub: Sub.optional(), route: z.string().min(1).max(200).optional() },
+  apphost: AppHost.optional(),
   status: z.coerce.number().int().min(0).max(65_535).optional(),
   // A query string says "true"; a tool call may send the boolean.
   ok: z.union([z.boolean(), z.enum(['true', 'false']).transform((v) => v === 'true')]).optional(),
