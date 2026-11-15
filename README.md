@@ -80,11 +80,12 @@ More: [docs/api.md](docs/api.md#ingest)
 
 `GET /api/v1/events` (tool `logs__query`) answers rows. `GET /api/v1/stats` (tool
 `logs__aggregate`) answers groups, and requires `kind`. Both take filters such as `since`, `until`,
-`extension`, `part`, `level`, `status`, `agcid` and `q` (text in `msg`, or an agcid).
+`extension`, `part`, `level`, `status`, `agcid`, `apphost` (an app host name) and `q` (text in `msg`, or an agcid).
 
 | Question                               | Call                                                              |
 | -------------------------------------- | ----------------------------------------------------------------- |
 | Errors that mention a timeout, 2 hours | `/events?level=error&q=timeout&since=2h`                          |
+| Every line of one app host             | `/events?apphost=stub&since=15m`                                  |
 | One request, every hop in time order   | `/events?agcid=<agcid>&order=asc&since=30d`                       |
 | Reliability per route, a day           | `/stats?kind=http&by=extension,part,route&since=24h`              |
 | Worst availability first               | `/stats?kind=http&by=extension,route&sort=availability&order=asc` |

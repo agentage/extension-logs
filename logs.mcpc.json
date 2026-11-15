@@ -1,16 +1,20 @@
 {
   "serverInfo": {
     "name": "agentage-logs",
-    "version": "0.5.0"
+    "version": "0.6.0"
   },
   "tools": [
     {
-      "description": "Log rows, newest first; order \"asc\" reads oldest first (one request in time order).\nFilters: kind (http, mcp, job, span, error, log, event, host, container), level, extension, part,\nhost, route, status, sub, agcid, ok, name (event or container name), q (text in msg, or an agcid), since and\nuntil (15m, 2h, 7d or ISO). sort \"ms\" reads the slowest first. limit pages; nextCursor goes back\nas cursor. Examples:\n- errors that mention a timeout, last 2 hours: {\"level\":\"error\",\"q\":\"timeout\",\"since\":\"2h\"}\n- one request, every hop in time order: {\"agcid\":\"<32 hex>\",\"order\":\"asc\",\"since\":\"30d\"}\n- the 500 answers of one route: {\"kind\":\"http\",\"route\":\"/api/v1/machines\",\"status\":500}\n- the tool calls of one caller: {\"kind\":\"mcp\",\"sub\":\"usr_7f3a\"}\n- the slowest failed requests of a day: {\"kind\":\"http\",\"ok\":false,\"sort\":\"ms\",\"since\":\"24h\"}\nFor counts, failure rates, latency or machines over time use logs__aggregate.",
+      "description": "Log rows, newest first; order \"asc\" reads oldest first (one request in time order).\nFilters: kind (http, mcp, job, span, error, log, event, host, container), level, extension, part,\nhost, apphost (an app host name), route, status, sub, agcid, ok, name (event or container name), q (text in msg, or an agcid), since and\nuntil (15m, 2h, 7d or ISO). sort \"ms\" reads the slowest first. limit pages; nextCursor goes back\nas cursor. Examples:\n- errors that mention a timeout, last 2 hours: {\"level\":\"error\",\"q\":\"timeout\",\"since\":\"2h\"}\n- one request, every hop in time order: {\"agcid\":\"<32 hex>\",\"order\":\"asc\",\"since\":\"30d\"}\n- the 500 answers of one route: {\"kind\":\"http\",\"route\":\"/api/v1/machines\",\"status\":500}\n- the tool calls of one caller: {\"kind\":\"mcp\",\"sub\":\"usr_7f3a\"}\n- the slowest failed requests of a day: {\"kind\":\"http\",\"ok\":false,\"sort\":\"ms\",\"since\":\"24h\"}\nFor counts, failure rates, latency or machines over time use logs__aggregate.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
           "agcid": {
             "pattern": "^[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "apphost": {
+            "pattern": "^[a-z][a-z0-9-]{0,47}$",
             "type": "string"
           },
           "cursor": {
@@ -272,6 +276,10 @@
         "properties": {
           "agcid": {
             "pattern": "^[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "apphost": {
+            "pattern": "^[a-z][a-z0-9-]{0,47}$",
             "type": "string"
           },
           "bucket": {

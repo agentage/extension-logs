@@ -29,6 +29,22 @@ describe.runIf(store)('the reads on ClickHouse, over the section 4 visits', () =
     expect((await find({ since: '1m' })).events).toHaveLength(3);
   });
 
+  it('search: apphost matches fields.agentage.apphost, answered nested, and nothing else', async () => {
+    const ts = new Date(Date.now() - 25 * 3_600_000).toISOString();
+    const line = (apphost: string) => ({
+      ...VISITS[0],
+      ts,
+      extension: 'hosted',
+      agcid: null,
+      fields: { 'agentage.apphost': apphost },
+    });
+    await s.insert([line('stub'), line('stub2')].map(toRow) as object[]);
+    const hit = await find({ apphost: 'stub', since: '2d' });
+    expect(hit.events).toHaveLength(1);
+    expect(hit.events[0]?.['fields']).toMatchObject({ agentage: { apphost: 'stub' } });
+    expect((await find({ apphost: 'nobody', since: '2d' })).events).toEqual([]);
+  });
+
   // A day old, so the other tests' 24 h and 1 h windows never see these rows, in any order.
   it('search: walking every page at limit 2 over rows with one ts has no gap and no overlap', async () => {
     const ts = new Date(Date.now() - 25 * 3_600_000).toISOString();

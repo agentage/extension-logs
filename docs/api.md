@@ -93,7 +93,7 @@ answers 400.
 Both reads take `kind` and these filters:
 
 - `since` and `until`: `15m`, `2h`, `7d` or an ISO time.
-- `extension`, `part`, `host`, `level`, `route`, `status`, `agcid`, `sub`, `ok` (`true` or `false`).
+- `extension`, `part`, `host`, `level`, `route`, `status`, `agcid`, `sub`, `apphost` (reads `fields.agentage.apphost`; a name like a secret name, else 400), `ok` (`true` or `false`).
 - `name`: the value that `by=name` groups. On `event`, `any` or no kind, it is the event name. On
   `container`, it is the container name. With another kind it is a 400.
 - `q`: text in `msg`, or an agcid.

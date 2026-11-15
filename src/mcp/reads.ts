@@ -8,7 +8,7 @@ import { type EventsStore } from '../lib/store.js';
 // The description is the router: an AI client picks the tool and its arguments from these examples.
 const QUERY = `Log rows, newest first; order "asc" reads oldest first (one request in time order).
 Filters: kind (http, mcp, job, span, error, log, event, host, container), level, extension, part,
-host, route, status, sub, agcid, ok, name (event or container name), q (text in msg, or an agcid), since and
+host, apphost (an app host name), route, status, sub, agcid, ok, name (event or container name), q (text in msg, or an agcid), since and
 until (15m, 2h, 7d or ISO). sort "ms" reads the slowest first. limit pages; nextCursor goes back
 as cursor. Examples:
 - errors that mention a timeout, last 2 hours: {"level":"error","q":"timeout","since":"2h"}
