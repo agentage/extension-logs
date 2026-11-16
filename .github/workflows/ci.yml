@@ -88,18 +88,8 @@ jobs:
           npm ci --prefix e2e-suite --no-audit --no-fund
           npx --prefix e2e-suite playwright install chromium
 
-      # up (kit 0.12) runs no clickhouse store: the parts reach this one through the docker host.
-      - name: ClickHouse 26.8 for the parts
-        run: docker run -d --name logs-store -p 8123:8123 -e CLICKHOUSE_USER=logs -e CLICKHOUSE_DB=logs -e CLICKHOUSE_PASSWORD=local clickhouse/clickhouse-server:26.8
-
-      # The estate mounts /run/secrets/store-url and refuses it declared; up mounts declared secrets only.
-      - name: Declare store-url for this run only (docs/run-locally.md)
-        run: jq '.agentage.secrets = ["store-url"]' package.json > p.json && mv p.json package.json
-
       # The cli and its kit come from this lockfile: a cli or kit patch needs a commit here.
       - name: agentage extension up --docker (the release recipes, dev issuer, gateway)
-        env:
-          AGENTAGE_SECRET_STORE_URL: http://logs:local@172.17.0.1:8123/logs
         run: node_modules/.bin/agentage extension up --docker
 
       - name: Ingest through the gateway lands in ClickHouse (p0 ingest, local)
@@ -113,7 +103,8 @@ jobs:
           line="{\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%S.000Z)\",\"level\":\"info\",\"kind\":\"log\",\"msg\":\"ci ingest\",\"extension\":\"logs\",\"part\":\"ci\"}"
           curl -sf -H "authorization: Bearer $T" -H 'content-type: application/json' \
             -d "[$line,$line]" localhost:4280/api/logs/events | tee /dev/stderr | jq -e '.data == {accepted: 2, rejected: 0}'
-          n=$(docker exec logs-store clickhouse-client --user logs --password local -d logs -q "SELECT count() FROM events WHERE msg = 'ci ingest'")
+          store=$(docker ps -q --filter label=com.docker.compose.service=store)
+          n=$(docker exec "$store" clickhouse-client --user logs --password agentage-local -d logs -q "SELECT count() FROM events WHERE msg = 'ci ingest'")
           echo "rows: $n"; test "$n" = 2
 
       - name: The widget a11y test through the local gateway (src/**/*.spec.ts)
