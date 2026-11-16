@@ -14,11 +14,11 @@ const statuses = async (sub: string, scope: string) => {
     ctx: createTestContext(),
     caller: { sub, scopes: [scope] },
   });
-  const ingest = await server.fetch('/api/v1/events', {
+  const ingest = await server.fetch('/api/logs/events', {
     ...post,
     body: JSON.stringify([LINES.log]),
   });
-  const read = await server.fetch('/api/v1/events');
+  const read = await server.fetch('/api/logs/events');
   await server.close();
   return [ingest.status, read.status];
 };

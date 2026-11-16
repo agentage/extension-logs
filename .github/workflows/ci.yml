@@ -97,10 +97,10 @@ jobs:
         run: jq '.agentage.secrets = ["store-url"]' package.json > p.json && mv p.json package.json
 
       # The cli and its kit come from this lockfile: a cli or kit patch needs a commit here.
-      - name: agentage extension up (the release recipes, dev issuer, gateway)
+      - name: agentage extension up --docker (the release recipes, dev issuer, gateway)
         env:
           AGENTAGE_SECRET_STORE_URL: http://logs:local@172.17.0.1:8123/logs
-        run: node_modules/.bin/agentage extension up
+        run: node_modules/.bin/agentage extension up --docker
 
       - name: Ingest through the gateway lands in ClickHouse (p0 ingest, local)
         run: |
@@ -108,11 +108,11 @@ jobs:
           # Ingest takes a svc_ subject: the dev issuer sets sub, the token command does not.
           T=$(curl -sf -H 'content-type: application/json' -d '{"scope":"logs:write","sub":"svc_ci"}' localhost:4281/token | jq -r .token)
           code=$(curl -s -o /dev/null -w '%{http_code}' -H "authorization: Bearer $(node_modules/.bin/agentage extension token --scope logs:write)" \
-            -H 'content-type: application/json' -d '[]' localhost:4280/api/v1/events)
+            -H 'content-type: application/json' -d '[]' localhost:4280/api/logs/events)
           echo "usr_ subject with logs:write: $code"; test "$code" = 403
           line="{\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%S.000Z)\",\"level\":\"info\",\"kind\":\"log\",\"msg\":\"ci ingest\",\"extension\":\"logs\",\"part\":\"ci\"}"
           curl -sf -H "authorization: Bearer $T" -H 'content-type: application/json' \
-            -d "[$line,$line]" localhost:4280/api/v1/events | tee /dev/stderr | jq -e '.data == {accepted: 2, rejected: 0}'
+            -d "[$line,$line]" localhost:4280/api/logs/events | tee /dev/stderr | jq -e '.data == {accepted: 2, rejected: 0}'
           n=$(docker exec logs-store clickhouse-client --user logs --password local -d logs -q "SELECT count() FROM events WHERE msg = 'ci ingest'")
           echo "rows: $n"; test "$n" = 2
 

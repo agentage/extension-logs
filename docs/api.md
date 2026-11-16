@@ -23,14 +23,14 @@ A full disk stops the ingest with 503. The reads still answer.
 
 ## Ingest
 
-`POST /api/v1/events` needs the scope `logs:write` and a `svc_` token subject. Else it answers 403.
+`POST /api/logs/events` needs the scope `logs:write` and a `svc_` token subject. Else it answers 403.
 
 A line is `EventSchema` of `@agentage/extension/logs`. The ingest adds two rules:
 
 - `ts` is inside the 30-day TTL (time to live) of the table and at most one hour in the future.
 - The subject is an opaque id `[A-Za-z0-9_-]{1,64}`, never an email.
 
-`POST /api/v1/events` takes a bare JSON array of lines, not an object. It answers
+`POST /api/logs/events` takes a bare JSON array of lines, not an object. It answers
 `{ accepted, rejected }` inside the kit's envelope, as counts: `{ "success": true, "data": { "accepted": 2, "rejected": 0 } }`. A line that fails the schema or the two rules counts as `rejected`.
 One batch holds at most 1000 lines and 1 MB. One batch is one ClickHouse insert.
 
@@ -84,7 +84,7 @@ timeout of 60 s. It only checks the oldest partition. It fails when that partiti
 
 ## Reads
 
-`GET /api/v1/events` (tool `logs__query`) answers rows. `GET /api/v1/stats` (tool
+`GET /api/logs/events` (tool `logs__query`) answers rows. `GET /api/logs/stats` (tool
 `logs__aggregate`) answers groups. `/stats` requires `kind`. Without `kind`, or with `window`, it
 answers 400.
 

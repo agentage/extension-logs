@@ -16,7 +16,7 @@ const post = async (body: unknown, caller: Caller | null = as('logs:write')) => 
     caller,
   });
   const init = { method: 'POST', headers: { 'content-type': 'application/json' } };
-  return server.fetch('/api/v1/events', { ...init, body: JSON.stringify(body) });
+  return server.fetch('/api/logs/events', { ...init, body: JSON.stringify(body) });
 };
 
 afterEach(async () => {
@@ -24,7 +24,7 @@ afterEach(async () => {
   store.insert.mockClear();
 });
 
-describe('POST /api/v1/events', () => {
+describe('POST /api/logs/events', () => {
   it('accepts the rows that fit the schema in one insert, counts the rest', async () => {
     const res = await post([LINES.http, LINES.mcp, { kind: 'nope' }]);
     expect(res.status).toBe(200);

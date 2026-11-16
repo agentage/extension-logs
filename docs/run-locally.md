@@ -11,7 +11,7 @@ Words used here:
 
 ## Run the whole extension with `up`
 
-`npx agentage extension up` does not run ClickHouse. This extension needs a store kind that `up`
+`npx agentage extension up --docker` does not run ClickHouse. This extension needs a store kind that `up`
 cannot start, so a plain `up` fails. You see this line:
 
 ```text
@@ -24,9 +24,9 @@ the docker host as the parts see it.
 
 1. `jq '.agentage.secrets = ["store-url"]' package.json > p.json && mv p.json package.json`
 2. `export AGENTAGE_SECRET_STORE_URL=http://logs:local@172.17.0.1:8123/logs`
-3. `npx agentage extension up` - `up` builds the images from `HEAD`, so the repo needs one commit. The tree can be dirty.
+3. `npx agentage extension up --docker` - `up --docker` builds the images from `HEAD`, so the repo needs one commit. The tree can be dirty.
 4. `git checkout package.json` - the images are built, so undo the edit now.
-5. Call it with a token that has the extension's scope: `T=$(npx agentage extension token --scope logs:admin)`, then `curl -H "Authorization: Bearer $T" "localhost:4280/api/v1/events?limit=5"`.
+5. Call it with a token that has the extension's scope: `T=$(npx agentage extension token --scope logs:admin)`, then `curl -H "Authorization: Bearer $T" "localhost:4280/api/logs/events?limit=5"`.
 6. `npx agentage extension down` - one working copy holds ports 4280 and 4281 at a time.
 
 `agentage extension token` sets no subject, so its token (subject `usr_dev`) gets 403 on
@@ -54,7 +54,7 @@ Under `up`, the ui part serves the harness page of the widget kit. The seed post
 - The services rows: one red by availability, one red by p95.
 
 ```bash
-npx agentage extension up                # with ClickHouse and store-url, see above
+npx agentage extension up --docker                # with ClickHouse and store-url, see above
 npm run harness:seed                     # LOGS_URL and LOGS_ISSUER override 4280 and 4281
 echo "http://localhost:4280/ui/$(jq -r .version package.json)/harness.html?widget=events&scope=logs:admin"
 ```

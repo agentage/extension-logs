@@ -30,7 +30,7 @@ docker run -d --name logs-store -p 8123:8123 -e CLICKHOUSE_USER=logs -e CLICKHOU
 CLICKHOUSE_URL=http://logs:local@localhost:8123/logs npm run verify
 ```
 
-`npx agentage extension up` alone fails: it does not start ClickHouse. CI also runs `agentage extension check`, then `up` and the e2e gate. To run every part, see
+`npx agentage extension up --docker` alone fails: it does not start ClickHouse. CI also runs `agentage extension check`, then `up --docker` and the e2e gate. To run every part, see
 [docs/run-locally.md](docs/run-locally.md#run-the-whole-extension-with-up).
 
 ## Parts
@@ -39,7 +39,7 @@ A part is one unit of the extension. The `api`, `mcp`, `worker` and `ui` parts a
 
 | Part   | Source                              | Serves                                                      |
 | ------ | ----------------------------------- | ----------------------------------------------------------- |
-| api    | [`src/api`](src/api/index.ts)       | `/api/v1/events`, `/stats`, `openapi.json`                  |
+| api    | [`src/api`](src/api/index.ts)       | `/api/logs/events`, `/stats`, `openapi.json`                |
 | mcp    | [`src/mcp`](src/mcp/index.ts)       | `POST /mcp`: `logs__*` ([`logs.mcpc.json`](logs.mcpc.json)) |
 | worker | [`src/worker`](src/worker/index.ts) | job `retention`, nightly                                    |
 | ui     | [`src/ui`](src/ui/index.ts)         | the widgets `events`, `hosts`, `services`                   |
@@ -66,7 +66,7 @@ a call answers 401.
 
 ## Ingest
 
-- `POST /api/v1/events` takes a bare JSON array of lines, not an object.
+- `POST /api/logs/events` takes a bare JSON array of lines, not an object.
 - It answers `{ "success": true, "data": { "accepted": 2, "rejected": 0 } }`. A line that fails the schema or the ingest rules counts as `rejected`.
 - The rules: `ts` is at most 30 days old and at most one hour ahead; `sub` is an opaque id, never an email.
 - One batch holds at most 1000 lines and 1 MB.
@@ -78,7 +78,7 @@ More: [docs/api.md](docs/api.md#ingest)
 
 ## The two reads
 
-`GET /api/v1/events` (tool `logs__query`) answers rows. `GET /api/v1/stats` (tool
+`GET /api/logs/events` (tool `logs__query`) answers rows. `GET /api/logs/stats` (tool
 `logs__aggregate`) answers groups, and requires `kind`. Both take filters such as `since`, `until`,
 `extension`, `part`, `level`, `status`, `agcid`, `apphost` (an app host name) and `q` (text in `msg`, or an agcid).
 

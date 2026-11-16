@@ -37,4 +37,4 @@ Read the file named here before you read `src/`.
 
 ## Commands
 
-- `npm run verify`; `npx agentage extension up` then `npm run test:e2e`; `npx agentage extension down`.
+- `npm run verify`; `npx agentage extension up --docker` then `npm run test:e2e`; `npx agentage extension down`.

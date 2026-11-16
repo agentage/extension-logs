@@ -86,7 +86,7 @@ const samples = Object.entries(HOSTS).flatMap(([host, cpu]) => [
   ...['api', 'mcp', 'shipper'].map(box(host, cpu)),
 ]);
 
-const res = await post(`${BASE}/api/v1/events`, [...lines, ...samples], token);
+const res = await post(`${BASE}/api/logs/events`, [...lines, ...samples], token);
 const { data } = await res.json();
 console.log(res.status, JSON.stringify(data), `${lines.length} lines, trace agcid ${trace}`);
 if (!res.ok) process.exitCode = 1;

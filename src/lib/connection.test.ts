@@ -15,6 +15,15 @@ describe('the store connection', () => {
     });
   });
 
+  it("parses the app host's per-service form (estate#204)", () => {
+    const text = 'http://platform__logs:s3cr3t@store-clickhouse_store:8123/platform__logs';
+    expect(parseStoreUrl(text)).toMatchObject({
+      url: 'http://store-clickhouse_store:8123',
+      username: 'platform__logs',
+      database: 'platform__logs',
+    });
+  });
+
   it('defaults the database when the URL has no path', () => {
     expect(parseStoreUrl('http://default:ci@localhost:8123').database).toBe('default');
   });
