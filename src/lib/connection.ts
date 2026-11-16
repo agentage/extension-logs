@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 
-// The default mount; AGENTAGE_STORE_URL_FILE overrides it.
+// The estate mounts a store's connection here for every server part (its src/mounts.ts).
 export const STORE_URL_FILE = '/run/secrets/store-url';
 
 export interface Connection {
@@ -27,14 +27,13 @@ export const parseStoreUrl = (text: string): Connection => {
 const readText = (file: string) => readFileSync(file, 'utf8');
 
 // A missing or empty file names the file, never a value.
-export const readConnection = (read = readText, env = process.env): Connection => {
-  const file = env.AGENTAGE_STORE_URL_FILE || STORE_URL_FILE;
+export const readConnection = (read = readText): Connection => {
   let text = '';
   try {
-    text = read(file);
+    text = read(STORE_URL_FILE);
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
   }
-  if (!text.trim()) throw new Error(`${file} has no value: the store is not mounted`);
+  if (!text.trim()) throw new Error(`${STORE_URL_FILE} has no value: the store is not mounted`);
   return parseStoreUrl(text);
 };

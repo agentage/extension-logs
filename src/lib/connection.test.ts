@@ -38,13 +38,6 @@ describe('the store connection', () => {
     expect(readConnection(read)).toMatchObject({ username: 'a', database: 'd' });
   });
 
-  it('reads the file AGENTAGE_STORE_URL_FILE names', () => {
-    const read = (file: string) => (file === '/x/url' ? 'http://a:b@c:8123/d' : '');
-    const env = { AGENTAGE_STORE_URL_FILE: '/x/url' };
-    expect(readConnection(read, env)).toMatchObject({ username: 'a' });
-    expect(() => readConnection(missing, env)).toThrow('/x/url has no value');
-  });
-
   it('names the file when it is missing or empty', () => {
     const why = `${STORE_URL_FILE} has no value: the store is not mounted`;
     expect(() => readConnection(missing)).toThrow(why);
