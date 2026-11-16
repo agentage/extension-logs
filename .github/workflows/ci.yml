@@ -127,16 +127,16 @@ jobs:
           if jq -e '.[] | select(.id == "logs")' e2e-suite/extensions.json >/dev/null; then
             echo "has=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::warning::agentage/e2e has no logs row yet: the gate on local did not run"
+            echo "::warning::agentage/e2e has no logs row yet: the gate on docker did not run"
           fi
 
       # {ID}_DIR lets the gate read the contracts from this checkout; the name follows the id.
-      - name: e2e gate on local (agentage/e2e, a row in its extensions.json)
+      - name: e2e gate on docker (agentage/e2e, a row in its extensions.json)
         if: github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.fork != true && steps.row.outputs.has == 'true'
         working-directory: e2e-suite
         run: |
           var="$(jq -r .agentage.id ../package.json | tr a-z- A-Z_)_DIR"
-          env "$var=$GITHUB_WORKSPACE" npm run e2e -- logs gate local
+          env "$var=$GITHUB_WORKSPACE" npm run e2e -- logs gate docker
 
       # A gate that skipped itself is not green.
       - name: Assert the gate was not vacuous
