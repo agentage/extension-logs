@@ -1,10 +1,9 @@
 import { createHash } from 'node:crypto';
-import { ClickHouseLogLevel, createClient } from '@clickhouse/client';
-import { fail, type Log } from '@agentage/extension';
-import { type Connection } from './connection.js';
+import { clickhouseOf, fail, type ClickhouseStore, type Log } from '@agentage/extension';
 import { DEDUP_SETTING, EVENTS_DDL, EVENTS_DEDUP, SHOW_EVENTS } from './ddl.js';
 
 type Params = Record<string, unknown>;
+type ClickhouseParams = Parameters<ClickhouseStore['query']>[1] & object;
 export type Row = Record<string, unknown>;
 
 // The narrow face of @clickhouse/client the parts use; tests pass a fake.
@@ -22,64 +21,54 @@ export interface EventsStore {
 }
 
 // 26.8 inserts async by default; the token makes a retried batch a no-op (docs/api.md, Ingest).
-const writes = (token: string) =>
-  ({
-    format: 'JSONEachRow',
-    clickhouse_settings: {
-      date_time_input_format: 'best_effort',
-      async_insert_deduplicate: 1,
-      insert_deduplication_token: token,
-    },
-  }) as const;
+const writes = (token: string) => ({
+  date_time_input_format: 'best_effort',
+  async_insert_deduplicate: 1,
+  insert_deduplication_token: token,
+});
 // Counts as JSON numbers; the server stops a read before the client gives up, and caps its memory on the 2 GB box.
-const reads = (timeoutMs: number) =>
-  ({
-    format: 'JSONEachRow',
-    clickhouse_settings: {
-      output_format_json_quote_64bit_integers: 0,
-      max_execution_time: Math.max(1, timeoutMs / 1000 - 1),
-      max_memory_usage: '268435456',
-      max_result_rows: '10000',
-      result_overflow_mode: 'throw',
-      max_rows_to_group_by: '100000',
-      group_by_overflow_mode: 'throw',
-    },
-  }) as const;
+const READS = {
+  max_execution_time: 9,
+  max_memory_usage: '268435456',
+  max_result_rows: '10000',
+  result_overflow_mode: 'throw',
+  max_rows_to_group_by: '100000',
+  group_by_overflow_mode: 'throw',
+};
 // Under the kit's 1 s health bound, so a hung store never stacks probes.
 const PING_MS = 900;
 
-export const clickhouse = (connection: Connection, timeoutMs = 10_000): Clickhouse => {
-  // Its own logger writes plain-text lines to stderr; failures reach the part's JSON log instead.
-  const log = { level: ClickHouseLogLevel.OFF };
-  const client = createClient({ ...connection, request_timeout: timeoutMs, log });
-  const READS = reads(timeoutMs);
-  return {
-    command: async (query) => void (await client.command({ query })),
-    insert: async (table, values, token) =>
-      void (await client.insert({ table, values, ...writes(token) })),
-    query: async <T = Row>(query: string, query_params?: Params, abort_signal?: AbortSignal) =>
-      (await client.query({ query, query_params, ...READS, abort_signal })).json<T>(),
-    ping: async () =>
-      (await client.ping({ select: true, abort_signal: AbortSignal.timeout(PING_MS) })).success,
-  };
-};
+// The kit opens the store (AGENTAGE_STORE_URL_FILE, params bound server-side); this is the face the parts use.
+export const fromKit = (kit: ClickhouseStore): Clickhouse => ({
+  command: (sql) => kit.command(sql),
+  insert: (table, rows, token) => kit.insert(table, rows, { settings: writes(token) }),
+  query: async <T = Row>(sql: string, params?: Params, signal?: AbortSignal) =>
+    (await kit.query<Row>(sql, params as ClickhouseParams, { settings: READS, signal }))
+      .rows as unknown as T[],
+  ping: () => kit.ping(),
+});
 
-// Opened on first use (the kit's tool runs create(ctx) with nothing mounted); no connection is a 503.
-export const lazy = (open: () => Clickhouse, log: Log): Clickhouse => {
-  let ch: Clickhouse | undefined;
-  const get = () => {
-    try {
-      return (ch ??= open());
-    } catch (err) {
-      log.error(err);
-      throw fail('UNAVAILABLE', 'The store is unavailable');
-    }
-  };
+// ctx.store of a package with no clickhouse store (a check or test context) is a 503 with the cause logged.
+export const openCh = (ctx: { readonly store: unknown }, log: Log): Clickhouse => {
+  const kit = clickhouseOf(ctx);
+  const ch = fromKit(kit);
+  const guard =
+    <T>(call: () => Promise<T>) =>
+    async () => {
+      try {
+        return await call();
+      } catch (err) {
+        if (!(err instanceof Error) || !/^no clickhouse store/.test(err.message)) throw err;
+        log.error(err);
+        throw fail('UNAVAILABLE', 'The store is unavailable');
+      }
+    };
   return {
-    command: async (sql) => get().command(sql),
-    insert: async (table, rows, token) => get().insert(table, rows, token),
-    query: async (...args) => get().query(...args),
-    ping: async () => get().ping(),
+    command: (sql) => guard(() => ch.command(sql))(),
+    insert: (t, rows, token) => guard(() => ch.insert(t, rows, token))(),
+    query: <T = Row>(sql: string, params?: Params, signal?: AbortSignal) =>
+      guard(() => ch.query<T>(sql, params, signal))(),
+    ping: () => ch.ping(),
   };
 };
 

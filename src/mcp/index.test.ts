@@ -4,9 +4,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 const query = vi.hoisted(() => vi.fn(async (): Promise<object[]> => []));
 vi.mock('../lib/store.js', async (original) => ({
   ...(await original<Record<string, unknown>>()),
-  clickhouse: () => ({ command: async () => undefined, insert: async () => undefined, query }),
+  openCh: () => ({ command: async () => undefined, insert: async () => undefined, query }),
 }));
-vi.mock('../lib/connection.js', () => ({ readConnection: () => ({}) }));
 const { create } = await import('./index.js');
 
 const ctx = () => createTestContext();

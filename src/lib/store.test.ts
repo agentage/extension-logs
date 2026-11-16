@@ -1,15 +1,18 @@
 import { createServer, type Server } from 'node:net';
-import { createTestContext } from '@agentage/extension';
+import {
+  createClickhouseStore,
+  createTestContext,
+  type ClickhouseStore,
+} from '@agentage/extension';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { DEDUP_SETTING, EVENTS_DDL, EVENTS_DEDUP, SHOW_EVENTS } from './ddl.js';
-import { readConnection } from './connection.js';
 import {
-  clickhouse,
   clickhouseCheck,
   createEventsStore,
   diskCheck,
+  fromKit,
   isOutage,
-  lazy,
+  openCh,
   type Clickhouse,
 } from './store.js';
 
@@ -144,62 +147,61 @@ describe('checks.disk', () => {
   });
 });
 
-describe('the lazy client', () => {
-  it('opens on first use, once', async () => {
-    const { ch } = fake();
-    const open = vi.fn(() => ch);
-    const client = lazy(open, createTestContext().log);
-    expect(open).not.toHaveBeenCalled();
-    await client.query('SELECT 1');
-    await client.ping();
-    expect(open).toHaveBeenCalledTimes(1);
-  });
-
-  it('answers UNAVAILABLE and logs while the file is missing, and opens once it is there', async () => {
-    const ctx = createTestContext();
-    const { ch } = fake();
-    const missing = (): string => {
-      throw Object.assign(new Error('no file'), { code: 'ENOENT' });
+describe('the kit store', () => {
+  it('passes the write token and the read limits as settings', async () => {
+    const kit = {
+      kind: 'clickhouse' as const,
+      query: vi.fn(async () => ({ rows: [{ a: 1 }] })),
+      command: vi.fn(async () => undefined),
+      insert: vi.fn(async () => undefined),
+      ping: vi.fn(async () => true),
+      close: vi.fn(async () => undefined),
     };
-    let read: () => string = missing;
-    const client = lazy(() => (readConnection(read), ch), ctx.log);
-    await expect(client.ping()).rejects.toMatchObject({ code: 'UNAVAILABLE' });
-    expect(ctx.logs.map((l) => l.level)).toContain('error');
-    read = () => 'http://a:b@c:8123/d';
-    await expect(client.ping()).resolves.toBe(true);
+    const ch = fromKit(kit as unknown as ClickhouseStore);
+    await ch.insert('events', [{ a: 1 }], 'tok');
+    expect(kit.insert).toHaveBeenCalledWith('events', [{ a: 1 }], {
+      settings: expect.objectContaining({ insert_deduplication_token: 'tok' }),
+    });
+    await expect(ch.query('SELECT {a:UInt8}', { a: 1 })).resolves.toEqual([{ a: 1 }]);
+    expect(kit.query).toHaveBeenCalledWith(
+      'SELECT {a:UInt8}',
+      { a: 1 },
+      {
+        settings: expect.objectContaining({ max_result_rows: '10000' }),
+        signal: undefined,
+      }
+    );
   });
 
-  it('answers UNAVAILABLE on a malformed store-url, never quoting it', async () => {
+  it('answers UNAVAILABLE and logs when the package has no clickhouse store', async () => {
     const ctx = createTestContext();
-    const client = lazy(() => clickhouse(readConnection(() => 'postgres://u:secret@h/d')), ctx.log);
-    await expect(client.query('SELECT 1')).rejects.toMatchObject({ code: 'UNAVAILABLE' });
-    await expect(client.insert('events', [], 't')).rejects.toMatchObject({ code: 'UNAVAILABLE' });
-    expect(JSON.stringify(ctx.logs)).not.toContain('secret');
+    const ch = openCh({ store: undefined }, ctx.log);
+    await expect(ch.query('SELECT 1')).rejects.toMatchObject({ code: 'UNAVAILABLE' });
+    await expect(ch.insert('events', [], 't')).rejects.toMatchObject({ code: 'UNAVAILABLE' });
+    await expect(ch.ping()).resolves.toBe(false);
+    expect(ctx.logs.map((l) => l.level)).toContain('error');
   });
 });
 
 describe('the client against a store that never answers or is not there', () => {
   const hung: Server = createServer(() => undefined).listen(0);
   afterAll(() => void hung.close());
-  const at = (port: number) => ({
-    url: `http://127.0.0.1:${port}`,
-    username: 'u',
-    password: 'p',
-    database: 'd',
-  });
+  const log = createTestContext().log;
+  const clickhouse = (port: number, timeoutMs = 10_000) =>
+    fromKit(createClickhouseStore(`http://u:p@127.0.0.1:${port}/d`, log, timeoutMs));
   const port = () => (hung.address() as { port: number }).port;
 
   it('gives up on a hung store at its timeout: query, insert and ping are UNAVAILABLE', async () => {
-    const store = createEventsStore(clickhouse(at(port()), 300), createTestContext().log);
+    const store = createEventsStore(clickhouse(port(), 300), createTestContext().log);
     const started = Date.now();
     await expect(store.query('SELECT 1')).rejects.toMatchObject({ code: 'UNAVAILABLE' });
     await expect(store.insert([{ a: 1 }])).rejects.toMatchObject({ code: 'UNAVAILABLE' });
     expect(Date.now() - started).toBeLessThan(2_000);
-    await expect(clickhouseCheck(clickhouse(at(port()), 300))()).resolves.toBe('unavailable');
+    await expect(clickhouseCheck(clickhouse(port(), 300))()).resolves.toBe('unavailable');
   });
 
   it('bounds both /health checks under the kit 1 s bound, whatever the client timeout', async () => {
-    const ch = clickhouse(at(port()));
+    const ch = clickhouse(port());
     const started = Date.now();
     const log = createTestContext().log;
     const checks = await Promise.all([clickhouseCheck(ch)(), diskCheck(ch, log)()]);
@@ -211,7 +213,7 @@ describe('the client against a store that never answers or is not there', () => 
     const closed = createServer().listen(0);
     const free = (closed.address() as { port: number }).port;
     closed.close();
-    const store = createEventsStore(clickhouse(at(free), 300), createTestContext().log);
+    const store = createEventsStore(clickhouse(free, 300), createTestContext().log);
     await expect(store.query('SELECT 1')).rejects.toMatchObject({ code: 'UNAVAILABLE' });
   });
 });

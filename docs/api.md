@@ -6,7 +6,7 @@ Which scope each call needs is in the README section [Scopes](../README.md#scope
 
 ## Store connection
 
-The api, mcp and worker read the store connection from `/run/secrets/store-url` on first use. The
+The api, mcp and worker use the kit's `ctx.store` (the host opens the URL in `AGENTAGE_STORE_URL_FILE`). The
 estate mounts that file. Its value has the form `http://logs:{pw}@logs_store:8123/logs`: user,
 password, host, database.
 
