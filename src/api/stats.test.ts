@@ -20,7 +20,7 @@ const get = async (path: string) => {
     ctx: createTestContext(),
     caller: admin,
   });
-  return server.fetch(`/api/v1${path}`);
+  return server.fetch(`/api/logs${path}`);
 };
 interface Body {
   data: Record<string, unknown>[];

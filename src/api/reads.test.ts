@@ -41,7 +41,7 @@ const get = async (path: string, caller: Caller | null) => {
     ctx: createTestContext(),
     caller,
   });
-  return server.fetch(`/api/v1${path}`);
+  return server.fetch(`/api/logs${path}`);
 };
 const as = (...scopes: string[]): Caller => ({ sub: 'usr_test', scopes });
 const A = 'a'.repeat(32);

@@ -4,9 +4,9 @@ import { clickhouseCheck, diskCheck } from '../lib/store.js';
 import { ingest } from './ingest.js';
 import { reads } from './reads.js';
 
-// Mounted at /api/v1; openapi.json is generated from these routes.
-export function create({ route, log, health }: ApiContext) {
-  const { ch, store } = openStore(log);
+// Mounted at /api/logs; openapi.json is generated from these routes.
+export function create({ route, log, health, store: kit }: ApiContext) {
+  const { ch, store } = openStore({ log, store: kit });
   health('clickhouse', clickhouseCheck(ch));
   health('disk', diskCheck(ch, log));
   void store.ready().catch(() => undefined);

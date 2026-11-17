@@ -1,8 +1,7 @@
-import { type Log } from '@agentage/extension';
-import { readConnection } from './connection.js';
-import { clickhouse, createEventsStore, lazy } from './store.js';
+import { type PartContext } from '@agentage/extension';
+import { createEventsStore, openCh } from './store.js';
 
-export const openStore = (log: Log) => {
-  const ch = lazy(() => clickhouse(readConnection()), log);
-  return { ch, store: createEventsStore(ch, log) };
+export const openStore = (ctx: Pick<PartContext, 'log' | 'store'>) => {
+  const ch = openCh(ctx, ctx.log);
+  return { ch, store: createEventsStore(ch, ctx.log) };
 };

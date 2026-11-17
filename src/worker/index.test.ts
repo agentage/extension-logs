@@ -3,9 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { type EventsStore } from '../lib/store.js';
 import { OLDEST, retention } from './retention.js';
 
-vi.mock('../lib/connection.js', () => ({
-  readConnection: () => ({ url: 'http://ch:8123', username: 'u', password: 'p', database: 'd' }),
-}));
 const { create } = await import('./index.js');
 
 const run = async (rows: object[]) => {

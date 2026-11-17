@@ -11,23 +11,11 @@ Words used here:
 
 ## Run the whole extension with `up`
 
-`npx agentage extension up` does not run ClickHouse. This extension needs a store kind that `up`
-cannot start, so a plain `up` fails. You see this line:
+`npx agentage extension up --docker` (kit 0.18 and later) runs a ClickHouse container for the `clickhouse` store kind and mounts its URL at `/run/secrets/store-url`. Nothing else is needed.
 
-```text
-FAIL api /health status unavailable, needs ok or degraded
-```
-
-To run it, start the ClickHouse container from the README. Then declare the `store-url` secret for
-this run only. The estate refuses a declared `store-url`, so never commit the edit. `172.17.0.1` is
-the docker host as the parts see it.
-
-1. `jq '.agentage.secrets = ["store-url"]' package.json > p.json && mv p.json package.json`
-2. `export AGENTAGE_SECRET_STORE_URL=http://logs:local@172.17.0.1:8123/logs`
-3. `npx agentage extension up` - `up` builds the images from `HEAD`, so the repo needs one commit. The tree can be dirty.
-4. `git checkout package.json` - the images are built, so undo the edit now.
-5. Call it with a token that has the extension's scope: `T=$(npx agentage extension token --scope logs:admin)`, then `curl -H "Authorization: Bearer $T" "localhost:4280/api/v1/events?limit=5"`.
-6. `npx agentage extension down` - one working copy holds ports 4280 and 4281 at a time.
+1. `npx agentage extension up --docker` - it builds the images from `HEAD`, so the repo needs one commit. The tree can be dirty.
+2. Call it with a token that has the extension's scope: `T=$(npx agentage extension token --scope logs:admin)`, then `curl -H "Authorization: Bearer $T" "localhost:4280/api/logs/events?limit=5"`.
+3. `npx agentage extension down` - one working copy holds ports 4280 and 4281 at a time.
 
 `agentage extension token` sets no subject, so its token (subject `usr_dev`) gets 403 on
 `POST /events`. Ingest needs a `svc_` subject. The harness seed below mints one. Without a token a
@@ -37,7 +25,7 @@ call answers 401.
 
 The job `Verify` runs `npm ci`, `npm run verify` and `agentage extension check`. It sets
 `CLICKHOUSE_URL` to a ClickHouse 26.8 service, so the store tests run. The job `up and the
-e2e gate on local` starts ClickHouse 26.8, declares `store-url`, runs `up`, posts a line through the
+e2e gate on local` runs `up` (it starts its own ClickHouse), posts a line through the
 gateway, runs `npm run test:e2e`, then runs the e2e gate of agentage/e2e (`.github/workflows/ci.yml`).
 
 ## Release
@@ -54,7 +42,7 @@ Under `up`, the ui part serves the harness page of the widget kit. The seed post
 - The services rows: one red by availability, one red by p95.
 
 ```bash
-npx agentage extension up                # with ClickHouse and store-url, see above
+npx agentage extension up --docker                # with its own ClickHouse
 npm run harness:seed                     # LOGS_URL and LOGS_ISSUER override 4280 and 4281
 echo "http://localhost:4280/ui/$(jq -r .version package.json)/harness.html?widget=events&scope=logs:admin"
 ```

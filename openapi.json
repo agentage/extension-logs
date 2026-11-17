@@ -72,7 +72,7 @@
     }
   },
   "paths": {
-    "/api/v1/events": {
+    "/api/logs/events": {
       "post": {
         "summary": "Ingest events",
         "security": [
@@ -558,7 +558,7 @@
         }
       }
     },
-    "/api/v1/stats": {
+    "/api/logs/stats": {
       "get": {
         "summary": "Groups of one kind with its measures (kind, by, bucket, sort, cursor)",
         "security": [

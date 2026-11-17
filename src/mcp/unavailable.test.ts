@@ -1,15 +1,9 @@
 import { createTestContext, startTestMcp } from '@agentage/extension';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { create } from './index.js';
 
-vi.mock('../lib/connection.js', () => ({
-  readConnection: () => {
-    throw new Error('store-url is not http://user:password@host:port/database');
-  },
-}));
-const { create } = await import('./index.js');
-
-describe('the logs tools without a store connection', () => {
-  it('answer the UNAVAILABLE tool error on a malformed store-url', async () => {
+describe('the logs tools without a clickhouse store', () => {
+  it('answer the UNAVAILABLE tool error', async () => {
     const server = await startTestMcp({ create, ctx: createTestContext() });
     await expect(server.call('query', {})).rejects.toThrow('The store is unavailable');
     await server.close();
