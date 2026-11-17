@@ -1,8 +1,8 @@
 import { KINDS } from '@agentage/extension/logs';
 
 // JSON paths are cast: ClickHouse refuses Dynamic in avg and GROUP BY.
-export const num = (path: string) => `CAST(fields.agentage.${path}, 'Nullable(Float64)')`;
-export const str = (path: string) => `ifNull(CAST(fields.${path}, 'Nullable(String)'), '')`;
+const num = (path: string) => `CAST(fields.agentage.${path}, 'Nullable(Float64)')`;
+const str = (path: string) => `ifNull(CAST(fields.${path}, 'Nullable(String)'), '')`;
 
 // A measure's SQL, or its SQL without and with a bucket (a sample: the newest, or the step's average).
 export type Measure = string | { now: string; step: string };

@@ -19,7 +19,7 @@ const List = z
   .max(200)
   .transform((text) => [...new Set(text.split(','))]);
 
-export const FILTER_NAMES = [
+const FILTER_NAMES = [
   ...(Object.keys(FILTER_FIELDS) as (keyof typeof FILTER_FIELDS)[]),
   'user_type',
 ] as const;

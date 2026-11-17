@@ -3,7 +3,7 @@ import { LEVELS, USER_TYPES } from '@agentage/extension/logs';
 
 const UNIT = { m: 60_000, h: 3_600_000, d: 86_400_000 } as const;
 export const STAMP = /^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{3}$/;
-export const stamp = (date: Date) => date.toISOString().replace('T', ' ').replace('Z', '');
+const stamp = (date: Date) => date.toISOString().replace('T', ' ').replace('Z', '');
 export const iso = (ts: unknown) => `${String(ts).replace(' ', 'T')}Z`;
 // A window ends 5 s ago: a row that lands late with an older ts cannot move groups between pages.
 export const pinnedEnd = () => stamp(new Date(Date.now() - 5_000));
@@ -27,14 +27,14 @@ export const decodeCursor = (cursor: string): unknown => {
   }
 };
 
-export const name = z.string().min(1).max(64);
-export const Agcid = z.string().regex(/^[0-9a-f]{32}$/);
+const name = z.string().min(1).max(64);
+const Agcid = z.string().regex(/^[0-9a-f]{32}$/);
 // A hostname: no slash, no '..', so a path segment never reads as another route.
-export const Host = z.string().regex(/^(?!.*\.\.)[A-Za-z0-9][\w.-]{0,252}$/);
+const Host = z.string().regex(/^(?!.*\.\.)[A-Za-z0-9][\w.-]{0,252}$/);
 // The ingest's subject rule: an opaque id, never an email.
-export const Sub = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
+const Sub = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
 // The kit's secret-name rule: lowercase, digits, hyphens, no underscore; also the app host name.
-export const AppHost = z.string().regex(/^[a-z][a-z0-9-]{0,47}$/);
+const AppHost = z.string().regex(/^[a-z][a-z0-9-]{0,47}$/);
 export const Order = z.enum(['desc', 'asc']);
 
 // The filters both reads take, besides kind and the window.
