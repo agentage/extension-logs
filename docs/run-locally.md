@@ -1,8 +1,7 @@
 # Run it locally
 
-The full local run of the extension with `up`, and the widget harness. The basic steps (`npm ci`,
-`verify`, ClickHouse for the store tests) are in the README section
-[Run it locally](../README.md#run-it-locally).
+The full local run of the extension with `up`, and the widget harness. The short steps are in the
+README sections [Quick start](../README.md#quick-start) and [Verify](../README.md#verify).
 
 Words used here:
 
