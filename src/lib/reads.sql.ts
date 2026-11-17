@@ -21,15 +21,15 @@ export const FILTERS = {
 } as const;
 
 // By time or by duration, ties by (ts, id); the cursor is that tuple of the page's last row.
-export const KEYS = {
+const KEYS = {
   ts: { ts: "{cursorTs:DateTime64(3, 'UTC')}", id: '{cursorId:UUID}' },
   ms: { ms: '{cursorMs:UInt32}', ts: "{cursorTs:DateTime64(3, 'UTC')}", id: '{cursorId:UUID}' },
 } as const;
-export const ORDERS = {
+const ORDERS = {
   desc: { dir: 'DESC', after: '<' },
   asc: { dir: 'ASC', after: '>' },
 } as const;
-export type SortKey = keyof typeof KEYS;
+type SortKey = keyof typeof KEYS;
 type Dir = keyof typeof ORDERS;
 
 // The builder trusts no caller: a sort or order outside the two tables never becomes SQL.

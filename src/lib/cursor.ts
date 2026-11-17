@@ -9,7 +9,7 @@ const PageSchema = z.strictObject({
   u: z.string().regex(STAMP),
   k: z.string().regex(/^[0-9a-f]{16}$/),
 });
-export type Page = z.output<typeof PageSchema>;
+type Page = z.output<typeof PageSchema>;
 
 export const PageCursor = z.string().max(300).transform(decodeCursor).pipe(PageSchema);
 export const encodePage = (page: Page) => Buffer.from(JSON.stringify(page)).toString('base64url');
