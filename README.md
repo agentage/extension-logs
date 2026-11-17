@@ -7,33 +7,26 @@ counts through an API, two MCP tools and three widgets. The store is one ClickHo
 Words:
 
 - **estate**: the set of servers and extensions agentage runs. The `agentage/estate` repo describes it.
-- **telemetry line**: one JSON line for one unit of work. Its `kind` says what unit: `http`, `mcp`, `job`, `span`, `error`, `event` or `log`.
+- **telemetry line**: one JSON line for one unit of work. Its `kind` says what unit: `http`, `mcp`, `job`, `span`, `error`, `event` or `log`. A read also takes the kinds `host` and `container`: the samples of a machine and of a container.
 - **agcid**: the id of one request. Every hop of the request logs the same `agcid`, so one search shows the whole path.
 - **subject** (`sub`): the account or service that made a call. A `svc_` subject is a service.
 
-## Run it locally
+## Quick start
 
-You need Node 22+, npm 10+, Docker, git and `jq`. Ports 4280 and 4281 must be free.
+You need Node 22+, npm 10+, Docker, git and `jq`. Ports 4280 and 4281 must be free. The repo needs one commit.
 
 ```bash
 npm ci
-npm run verify                  # type-check, lint, format, tests, build
-npx agentage extension check    # PASS logs <version> conforms
+npx agentage extension up --docker    # builds the images, starts ClickHouse, a dev token issuer and a gateway
+T=$(npx agentage extension token --scope logs:admin)
+curl -H "Authorization: Bearer $T" "localhost:4280/api/logs/events?limit=5"
+npx agentage extension down
 ```
 
-The store tests (`src/**/*.clickhouse.test.ts`, `src/api/clickhouse.test.ts`) need a real ClickHouse
-26.8. They skip when `CLICKHOUSE_URL` is not set. To run them, start ClickHouse first:
+A new store is empty. To send lines and see the widgets, use the harness seed in
+[docs/run-locally.md](docs/run-locally.md#widgets).
 
-```bash
-docker run -d --name logs-store -p 8123:8123 -e CLICKHOUSE_USER=logs -e CLICKHOUSE_DB=logs \
-  -e CLICKHOUSE_PASSWORD=local clickhouse/clickhouse-server:26.8   # the user is `logs`, never `default`
-CLICKHOUSE_URL=http://logs:local@localhost:8123/logs npm run verify
-```
-
-`npx agentage extension up --docker` alone fails: it does not start ClickHouse. CI also runs `agentage extension check`, then `up --docker` and the e2e gate. To run every part, see
-[docs/run-locally.md](docs/run-locally.md#run-the-whole-extension-with-up).
-
-## Parts
+## What it serves
 
 A part is one unit of the extension. The `api`, `mcp`, `worker` and `ui` parts are folders in `src/` and ship as images; `store` is the ClickHouse database.
 
@@ -50,7 +43,7 @@ Generated contracts:
 
 More: [docs/api.md](docs/api.md#store-connection)
 
-## Scopes
+### Scopes
 
 Any account can get a `logs:read` or `logs:write` token, so reads need `logs:admin`. Only an admin
 can get `logs:admin` or a service token (`svc_`).
@@ -64,7 +57,7 @@ can get `logs:admin` or a service token (`svc_`).
 `agentage extension token` sets no subject, so its token gets 403 on `POST /events`. Without a token
 a call answers 401.
 
-## Ingest
+### Ingest
 
 - `POST /api/logs/events` takes a bare JSON array of lines, not an object.
 - It answers `{ "success": true, "data": { "accepted": 2, "rejected": 0 } }`. A line that fails the schema or the ingest rules counts as `rejected`.
@@ -76,7 +69,7 @@ a call answers 401.
 
 More: [docs/api.md](docs/api.md#ingest)
 
-## The two reads
+### The two reads
 
 `GET /api/logs/events` (tool `logs__query`) answers rows. `GET /api/logs/stats` (tool
 `logs__aggregate`) answers groups, and requires `kind`. Both take filters such as `since`, `until`,
@@ -93,6 +86,24 @@ More: [docs/api.md](docs/api.md#ingest)
 
 More: [docs/api.md](docs/api.md#reads)
 
+## Verify
+
+```bash
+npm run verify                  # type-check, lint, format, tests, build
+npx agentage extension check    # PASS logs <version> conforms
+```
+
+The store tests (`src/**/*.clickhouse.test.ts`, `src/api/clickhouse.test.ts`) need a real ClickHouse
+26.8. They skip when `CLICKHOUSE_URL` is not set. To run them, start ClickHouse first:
+
+```bash
+docker run -d --name logs-store -p 8123:8123 -e CLICKHOUSE_USER=logs -e CLICKHOUSE_DB=logs \
+  -e CLICKHOUSE_PASSWORD=local clickhouse/clickhouse-server:26.8   # the user is `logs`, never `default`
+CLICKHOUSE_URL=http://logs:local@localhost:8123/logs npm run verify
+```
+
+CI also runs `up --docker` and the e2e gate: [docs/run-locally.md](docs/run-locally.md#what-ci-runs).
+
 ## Release
 
 1. Set the version in `package.json`.
@@ -102,14 +113,22 @@ More: [docs/api.md](docs/api.md#reads)
 
 `release.yml` runs `npm ci --ignore-scripts`, `npm run verify`, then `agentage extension release` of the cli the lockfile pins. It refuses the id `template`, a commit off
 master and a tag that is not the version. It pushes the part images to
-`ghcr.io/agentage/logs-{part}` and attaches `agentage-extension.json` to the
-GitHub release. The package is `private`: no npm.
+`ghcr.io/agentage/logs-{part}` and attaches `agentage-container.json` and
+`agentage-extension.json` to the GitHub release. The package is `private`: no npm.
+
+## Deploy
+
+A release deploys nothing. The `logs` row in `platform/installation.json` of agentage/apphosts
+names the version that runs on the platform app host of `next`, the staging estate. The app host
+serves `/api/logs/...` and `/mcp/logs`. The older deployment, the `logs` row in agentage/estate
+`estate.yaml`, still runs at `logs.next.agentage.io`. More: [CLAUDE.md](CLAUDE.md#after-a-release).
 
 ## Documentation
 
 - [docs/run-locally.md](docs/run-locally.md): the full run with `up` and the widget harness.
 - [docs/api.md](docs/api.md): connection, `/health`, ingest, limits, retention, reads.
+- [CLAUDE.md](CLAUDE.md): the rules for an agent that changes this repo.
 
 ## License
 
-MIT
+MIT, see [LICENSE](LICENSE).

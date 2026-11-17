@@ -15,10 +15,12 @@ This file only adds what the tree does not say.
 - The store's read limits: `docs/api.md` "The store's limits"; proof `src/lib/store.ts`.
 - Retention (TTL, nightly check): `docs/api.md` "Retention"; proof `src/worker/retention.ts`, `src/lib/ddl.ts`.
 - Contracts: `openapi.json` (routes, status codes) and `logs.mcpc.json` (tools); generated, never edit by hand.
-- Local run, store tests: `README.md` "Run it locally"; `up`, widget harness: `docs/run-locally.md`.
+- Local run: `README.md` "Quick start"; store tests: `README.md` "Verify"; `up`, widget harness: `docs/run-locally.md`.
 - The events table (there is no `migrations/`): `src/lib/ddl.ts`.
 - CI jobs and the gate floor (`MIN_EXECUTED`): `.github/workflows/ci.yml`.
 - Release steps and refusals: `README.md` "Release"; proof `.github/workflows/release.yml`.
+- Where a release runs: `README.md` "Deploy", "After a release" below.
+- The target design (the extension model, the app host, the app shell): the north star in the agentage product vault, `projects/architecture/`. Do not copy it into this repo.
 
 Read the file named here before you read `src/`.
 
@@ -38,3 +40,9 @@ Read the file named here before you read `src/`.
 ## Commands
 
 - `npm run verify`; `npx agentage extension up --docker` then `npm run test:e2e`; `npx agentage extension down`.
+
+## After a release
+
+- The `logs` row in `platform/installation.json` of agentage/apphosts sets the version on the platform app host of `next`. It is an exact version: change it by a pull request there. A merge there deploys.
+- The `logs` row in agentage/estate `estate.yaml` is the older deployment at `logs.next.agentage.io`, also an exact version. The estate sends its telemetry there.
+- A kit minor reaches this repo through the Friday Dependabot group PR. Merge it when CI is green.
