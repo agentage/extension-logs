@@ -1,6 +1,6 @@
 {
   "name": "@agentage/extension-logs",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "private": true,
   "description": "The logs extension: one events table in ClickHouse, the ingest, the rows and groups reads, two MCP tools and three widgets",
   "type": "module",
@@ -51,12 +51,13 @@
     "harness:seed": "node scripts/harness-seed.mjs"
   },
   "dependencies": {
-    "@agentage/extension": "^0.18.1",
+    "@agentage/extension": "^0.18.4",
     "express": "^5.1.0",
     "zod": "^4.2.0"
   },
   "devDependencies": {
     "@agentage/cli": "0.55.0",
+    "@agentage/design-system": "0.20.1",
     "@agentage/widget": "^0.3.0",
     "@axe-core/playwright": "4.14.0",
     "@playwright/test": "1.65.0",
